@@ -66,7 +66,10 @@ states1115 <-lapply(states, FUN=cleaning)
 #Combine all data frames in list
 states1115 <-ldply(states1115, data.frame)
 
-states1115=reshape(states1115 ,timevar = 'recfips',idvar = 'sendfips',v.names = 'movers',direction = 'wide')
+#Removing NA values and Observations from Puerto Rico (string begins with "72")
+states1115 <- subset(states1115, states1115$sendfips!="NA")
+states1115 <- states1115[!grepl("^72?[0-9]", states1115$sendfips), ]
+
 
 rm(Alabama, Alaska, Arizona, Arkansas, California, Colorado, Connecticut,
    Delaware, `District of Columbia`, Florida, Georgia, Hawaii, Idaho, 
@@ -77,6 +80,7 @@ rm(Alabama, Alaska, Arizona, Arkansas, California, Colorado, Connecticut,
    Pennsylvania, `Rhode Island`, `South Carolina`, `South Dakota`, 
    Tennessee, Texas, Utah, Vermont, Virginia, Washington, `West Virginia`,
    Wisconsin, Wyoming)
+
 
 #2010 - 2014
 list2env(inflow1014,envir=.GlobalEnv)
@@ -97,7 +101,9 @@ states1014 <-lapply(states, FUN=cleaning)
 #Combine all data frames in list
 states1014 <-ldply(states1014, data.frame)
 
-states1014=reshape(states1014 ,timevar = 'recfips',idvar = 'sendfips',v.names = 'movers',direction = 'wide')
+#Removing NA values and Observations from Puerto Rico (string begins with "72")
+states1014 <- subset(states1014, states1014$sendfips!="NA")
+states1014 <- states1014[!grepl("^72?[0-9]", states1014$sendfips), ]
 
 
 rm(Alabama, Alaska, Arizona, Arkansas, California, Colorado, Connecticut,
@@ -130,7 +136,9 @@ states0913 <-lapply(states, FUN=cleaning)
 #Combine all data frames in list
 states0913 <-ldply(states0913, data.frame)
 
-states0913=reshape(states0913 ,timevar = 'recfips',idvar = 'sendfips',v.names = 'movers',direction = 'wide')
+#Removing NA values and Observations from Puerto Rico (string begins with "72")
+states0913 <- subset(states0913, states0913$sendfips!="NA")
+states0913 <- states0913[!grepl("^72?[0-9]", states0913$sendfips), ]
 
 
 rm(Alabama, Alaska, Arizona, Arkansas, California, Colorado, Connecticut,
@@ -145,7 +153,7 @@ rm(Alabama, Alaska, Arizona, Arkansas, California, Colorado, Connecticut,
 
 #2008 - 2012
 
-ist2env(inflow0812,envir=.GlobalEnv)
+list2env(inflow0812,envir=.GlobalEnv)
 
 states <- list(Alabama, Alaska, Arizona, Arkansas, California, Colorado, Connecticut,
                Delaware, `District of Columbia`, Florida, Georgia, Hawaii, Idaho, 
@@ -163,7 +171,9 @@ states0812 <-lapply(states, FUN=cleaning)
 #Combine all data frames in list
 states0812 <-ldply(states0812, data.frame)
 
-states0812=reshape(states0812 ,timevar = 'recfips',idvar = 'sendfips',v.names = 'movers',direction = 'wide')
+#Removing NA values and Observations from Puerto Rico (string begins with "72")
+states0812 <- subset(states0812, states0812$sendfips!="NA")
+states0812 <- states0812[!grepl("^72?[0-9]", states0812$sendfips), ]
 
 rm(Alabama, Alaska, Arizona, Arkansas, California, Colorado, Connecticut,
    Delaware, `District of Columbia`, Florida, Georgia, Hawaii, Idaho, 
@@ -195,7 +205,9 @@ states0711 <-lapply(states, FUN=cleaning)
 #Combine all data frames in list
 states0711 <-ldply(states0711, data.frame)
 
-states0711=reshape(states0711 ,timevar = 'recfips',idvar = 'sendfips',v.names = 'movers',direction = 'wide')
+#Removing NA values and Observations from Puerto Rico (string begins with "72")
+states0711 <- subset(states0711, states0711$sendfips!="NA")
+states0711 <- states0711[!grepl("^72?[0-9]", states0711$sendfips), ]
 
 rm(Alabama, Alaska, Arizona, Arkansas, California, Colorado, Connecticut,
    Delaware, `District of Columbia`, Florida, Georgia, Hawaii, Idaho, 
@@ -226,7 +238,9 @@ states0610 <-lapply(states, FUN=cleaning)
 #Combine all data frames in list
 states0610 <-ldply(states0610, data.frame)
 
-states0610=reshape(states0610 ,timevar = 'recfips',idvar = 'sendfips',v.names = 'movers',direction = 'wide')
+#Removing NA values and Observations from Puerto Rico (string begins with "72")
+states0610 <- subset(states0610, states0610$sendfips!="NA")
+states0610 <- states0610[!grepl("^72?[0-9]", states0610$sendfips), ]
 
 rm(Alabama, Alaska, Arizona, Arkansas, California, Colorado, Connecticut,
    Delaware, `District of Columbia`, Florida, Georgia, Hawaii, Idaho, 
@@ -257,7 +271,9 @@ states0509 <-lapply(states, FUN=cleaning)
 #Combine all data frames in list
 states0509 <-ldply(states0509, data.frame)
 
-states0509 = reshape(states0509 ,timevar = 'recfips',idvar = 'sendfips',v.names = 'movers',direction = 'wide')
+#Removing NA values and Observations from Puerto Rico (string begins with "72")
+states0509 <- subset(states0509, states0509$sendfips!="NA")
+states0509 <- states0509[!grepl("^72?[0-9]", states0509$sendfips), ]
 
 rm(Alabama, Alaska, Arizona, Arkansas, California, Colorado, Connecticut,
    Delaware, `District of Columbia`, Florida, Georgia, Hawaii, Idaho, 
@@ -269,4 +285,12 @@ rm(Alabama, Alaska, Arizona, Arkansas, California, Colorado, Connecticut,
    Tennessee, Texas, Utah, Vermont, Virginia, Washington, `West Virginia`,
    Wisconsin, Wyoming)
 
-view(states0509)
+
+#Saving matrices as separate data frames
+save(states0509, file = "states0509.Rdata")
+save(states0610, file = "states0610.Rdata")
+save(states0711, file = "states0711.Rdata")
+save(states0812, file = "states0812.Rdata")
+save(states0913, file = "states0913.Rdata")
+save(states1014, file = "states1014.Rdata")
+save(states1115, file = "states1115.Rdata")
