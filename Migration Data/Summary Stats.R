@@ -48,7 +48,7 @@ subset(county_covariate$sendfips,county_covariate$state==2)
 #Removing them from data frame
 
 alaska <- list("2013", "2016", "2020", "2050", "2060", "2068", "2070", "2090", "2100",
-               "2105", "2110", "2122", "2130", "2150", "2164", "2170", "2180", "2185",
+               "2105", "2110", "2122", "2130", "2150", "2158", "2164", "2170", "2180", "2185",
                "2188", "2195", "2198", "2220", "2230", "2240", "2261", "2270", "2275",
                "2282", "2290")
 
@@ -59,7 +59,7 @@ states1115 <- states1115[!(states1115$recfips %in% alaska), ]
 subset(county_covariate$sendfips,county_covariate$state==15)
 
 #Removing them from data frame
-hawaii <-list("15001", "15003", "15005", "15007", "15009")
+hawaii <-list("15001", "15003", "15005", "15007", "15009", "46102")
 
 states1115 <- states1115[!(states1115$sendfips %in% hawaii), ]
 states1115 <- states1115[!(states1115$recfips %in% hawaii), ]
@@ -68,6 +68,9 @@ states1115 <- states1115[!(states1115$recfips %in% hawaii), ]
 states0509 <- subset(states0509, states0509$sendfips!="NA")
 county_covariate <- subset(county_covariate, county_covariate$state!=2)
 county_covariate <- subset(county_covariate, county_covariate$state!=15)
+
+#Merging migration information with covariate data
+states1115_migration_complete <- merge(states1115, county_covariate, by="sendfips", all.x=T)
 
 #Creating edgelist from data
 #2011 - 2015
@@ -86,11 +89,45 @@ library(maps)
 library(geosphere)
 
 usa <- map_data("state")
+texas <- map_data("state", region="texas")
 
+# Plot a map of the united states:
+map("state", region="texas", col="grey20", fill=TRUE, bg="black", lwd=0.1)
 
-p1 <-ggplot()+geom_polygon(data=usa, aes(x=long, y=lat, group=group)) + 
-  geom_point(data=county_covariate, aes(x=Longitude, y=Latitude)) 
+# Add a point on the map for each county
+#points(x=county_covariate$Longitude, y=county_covariate$Latitude, pch=19, 
+#       col="orange")
 
-p1
+#Generating color gradient for edges in the network 
+col.1 <- adjustcolor("orange red", alpha=0.4)
+col.2 <- adjustcolor("orange", alpha=0.4)
+edge.pal <- colorRampPalette(c(col.1, col.2), alpha = TRUE)
+edge.col <- edge.pal(100)
+
+#Generating shortest distance "arcs"
+#Ex: Alabama (sending and receiving)
+#states1115_alabama_complete <-subset(states1115_migration_complete, states1115_migration_complete$state==1)
+#states1115_alabama_complete$movers <- as.numeric(as.factor(states1115_alabama_complete$movers))
+
+#Within Texas Migration
+#Subset all migration to and from Texas Counties 
+states1115_texas_complete <-subset(states1115_migration_complete, states1115_migration_complete$state==48)
+#Intra-texas migration
+states1115_texas_complete <- states1115_texas_complete[grepl("^48[0-9]", states1115_texas_complete$sendfips), ]
+states1115_texas_complete <- states1115_texas_complete[grepl("^48[0-9]", states1115_texas_complete$recfips), ]
+
+states1115_texas_complete$movers <- as.numeric(as.factor(states1115_texas_complete$movers))
+
+for(i in 1:nrow(states1115_texas_complete))  {
+  node1 <- county_covariate[county_covariate$sendfips == states1115_texas_complete[i,]$sendfips,]
+  node2 <- county_covariate[county_covariate$sendfips == states1115_texas_complete[i,]$recfips,]
+  
+  arc <- gcIntermediate( c(node1[1,]$Longitude, node1[1,]$Latitude), 
+                         c(node2[1,]$Longitude, node2[1,]$Latitude), 
+                         n=100, addStartEnd=TRUE )
+  edge.ind <- round(25*states1115_texas_complete[i,]$movers / max(states1115_texas_complete$movers))
+  
+  lines(arc, col=edge.col[edge.ind], lwd=edge.ind/30)
+}
 
 
