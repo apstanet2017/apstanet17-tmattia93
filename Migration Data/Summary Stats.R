@@ -21,29 +21,35 @@ library(plyr)
 library(statnet)
 library(igraph)
 library(network)
+library(sand)
+library(intergraph)
+library(ergm)
+library(maps)
+library(geosphere)
 
 #Set working directory
 setwd('~/Dropbox/github/Migration Data')
 
 #Loading Migration Data
-states0509 <-get(load('states0509.Rdata'))
-states0610 <-get(load('states0610.Rdata'))
-states0711 <-get(load('states0711.Rdata'))
-states0812 <-get(load('states0812.Rdata'))
-states0913 <-get(load('states0913.Rdata'))
-states1014 <-get(load('states1014.Rdata'))
+#states0509 <-get(load('states0509.Rdata'))
+#states0610 <-get(load('states0610.Rdata'))
+#states0711 <-get(load('states0711.Rdata'))
+#states0812 <-get(load('states0812.Rdata'))
+#states0913 <-get(load('states0913.Rdata'))
+#states1014 <-get(load('states1014.Rdata'))
 states1115 <-get(load('states1115.Rdata'))
 
 #Loading Covariate Data
 county_covariate <-get(load('county_covariate.Rdata'))
 
 #Merge covariate information with migration data 
+
 #Changing column name for merge
 colnames(county_covariate)[1] <- "sendfips"
 
 #Exclusing Alaska and Hawaii (sending and receiving)
 #Identifying counties in Alaska
-subset(county_covariate$sendfips,county_covariate$state==2)
+subset(county_covariate$sendfips, county_covariate$state==2)
 
 #Removing them from data frame
 
@@ -65,38 +71,123 @@ states1115 <- states1115[!(states1115$sendfips %in% hawaii), ]
 states1115 <- states1115[!(states1115$recfips %in% hawaii), ]
 
 #Subsetting covariate information to exclude Alaska and Hawaii 
-states0509 <- subset(states0509, states0509$sendfips!="NA")
+states1115 <- subset(states1115, states1115$sendfips!="NA")
 county_covariate <- subset(county_covariate, county_covariate$state!=2)
 county_covariate <- subset(county_covariate, county_covariate$state!=15)
 
 #Merging migration information with covariate data
 states1115_migration_complete <- merge(states1115, county_covariate, by="sendfips", all.x=T)
 
+###########################################################################################################
+###########################################################################################################
+########################################### Constructing Network ########################################## 
+###########################################################################################################
+###########################################################################################################
+#1) Migration from 2011 - 2015
+
 #Creating edgelist from data
-#2011 - 2015
 edgelist_states1115 <- as.matrix(states1115)
 
+#Creating graph from the edgelist
 graph_states1115 = graph.edgelist(edgelist_states1115[,1:2])
 
 #Adding weights 
 E(graph_states1115)$weight = as.numeric(edgelist_states1115[,3])
 
+#Setting vertex attributes
+set.vertex.attribute(graph_states1115)
+
 #Extracing adjacency matrix
 adjacency_matrix_states_1115 <- as_adjacency_matrix(graph_states1115, names=T, type="both", attr="weight")
 
-#Visualize the data
-library(maps)
-library(geosphere)
+#Setting vertex attributes (nodal covariates)
+#1) Need to remove spaces from name string
+V(graph_states1115)$name <- gsub(" ", "", V(graph_states1115)$name, fixed = TRUE)
 
-usa <- map_data("state")
-texas <- map_data("state", region="texas")
+#2) Setting vertex attributes
+#Location Descriptors
+V(graph_states1115)$state_name = as.character(county_covariate$statename[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$state_number = as.character(county_covariate$state[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$county_name = as.character(county_covariate$countyname[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$county_string = as.character(county_covariate$countystring[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$latitude = as.character(county_covariate$Latitude[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$longitude = as.character(county_covariate$Longitude[match(V(graph_states1115)$name, county_covariate$sendfips)])
+
+#Household income (2009 - 2015)
+V(graph_states1115)$hhincome_2009 = as.character(county_covariate$hhincome_2009[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$hhincome_2010 = as.character(county_covariate$hhincome_2010[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$hhincome_2011 = as.character(county_covariate$hhincome_2011[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$hhincome_2012 = as.character(county_covariate$hhincome_2012[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$hhincome_2013 = as.character(county_covariate$hhincome_2013[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$hhincome_2014 = as.character(county_covariate$hhincome_2013[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$hhincome_2015 = as.character(county_covariate$hhincome_2013[match(V(graph_states1115)$name, county_covariate$sendfips)])
+
+#Unemployment rate (2009 - 2015)
+V(graph_states1115)$unemployment_rate_2009 = as.character(county_covariate$unemploymentrate_2009[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$unemployment_rate_2010 = as.character(county_covariate$unemploymentrate_2010[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$unemployment_rate_2011 = as.character(county_covariate$unemploymentrate_2011[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$unemployment_rate_2012 = as.character(county_covariate$unemploymentrate_2012[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$unemployment_rate_2013 = as.character(county_covariate$unemploymentrate_2013[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$unemployment_rate_2014 = as.character(county_covariate$unemploymentrate_2014[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$unemployment_rate_2015 = as.character(county_covariate$unemploymentrate_2015[match(V(graph_states1115)$name, county_covariate$sendfips)])
+
+#High School Graduation Rate (2009 - 2015)
+V(graph_states1115)$hs_gradrate_2009 = as.character(county_covariate$hs_gradrate_2009[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$hs_gradrate_2010 = as.character(county_covariate$hs_gradrate_2010[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$hs_gradrate_2011 = as.character(county_covariate$hs_gradrate_2011[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$hs_gradrate_2012 = as.character(county_covariate$hs_gradrate_2012[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$hs_gradrate_2013 = as.character(county_covariate$hs_gradrate_2013[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$hs_gradrate_2014 = as.character(county_covariate$hs_gradrate_2014[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$hs_gradrate_2015 = as.character(county_covariate$hs_gradrate_2015[match(V(graph_states1115)$name, county_covariate$sendfips)])
+
+#Household Poverty Rate (2009 - 2015)
+V(graph_states1115)$hh_poverty_rate_2009 = as.character(county_covariate$hh_poverty_rate_2009[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$hh_poverty_rate_2010 = as.character(county_covariate$hh_poverty_rate_2010[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$hh_poverty_rate_2011 = as.character(county_covariate$hh_poverty_rate_2011[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$hh_poverty_rate_2012 = as.character(county_covariate$hh_poverty_rate_2012[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$hh_poverty_rate_2013 = as.character(county_covariate$hh_poverty_rate_2013[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$hh_poverty_rate_2014 = as.character(county_covariate$hh_poverty_rate_2014[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$hh_poverty_rate_2015 = as.character(county_covariate$hh_poverty_rate_2014[match(V(graph_states1115)$name, county_covariate$sendfips)])
+
+#Total population (2010 - 2015)
+V(graph_states1115)$total_pop_2010 = as.character(county_covariate$total_pop_2010[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$total_pop_2011 = as.character(county_covariate$total_pop_2011[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$total_pop_2012 = as.character(county_covariate$total_pop_2012[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$total_pop_2013 = as.character(county_covariate$total_pop_2013[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$total_pop_2014 = as.character(county_covariate$total_pop_2014[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$total_pop_2015 = as.character(county_covariate$total_pop_2015[match(V(graph_states1115)$name, county_covariate$sendfips)])
+
+# Racial information 
+V(graph_states1115)$perc_white_2010 = as.character(county_covariate$perc_white_2010[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$perc_white_2011 = as.character(county_covariate$perc_white_2011[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$perc_white_2012 = as.character(county_covariate$perc_white_2012[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$perc_white_2013 = as.character(county_covariate$perc_white_2013[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$perc_white_2014 = as.character(county_covariate$perc_white_2014[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$perc_white_2015 = as.character(county_covariate$perc_white_2015[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$perc_black_2010 = as.character(county_covariate$perc_black_2010[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$perc_black_2011 = as.character(county_covariate$perc_black_2011[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$perc_black_2012 = as.character(county_covariate$perc_black_2012[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$perc_black_2013 = as.character(county_covariate$perc_black_2013[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$perc_black_2014 = as.character(county_covariate$perc_black_2014[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$perc_black_2015 = as.character(county_covariate$perc_black_2015[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$perc_latino_2010 = as.character(county_covariate$perc_latino_2010[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$perc_latino_2011 = as.character(county_covariate$perc_latino_2011[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$perc_latino_2012 = as.character(county_covariate$perc_latino_2012[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$perc_latino_2013 = as.character(county_covariate$perc_latino_2013[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$perc_latino_2014 = as.character(county_covariate$perc_latino_2014[match(V(graph_states1115)$name, county_covariate$sendfips)])
+V(graph_states1115)$perc_latino_2015 = as.character(county_covariate$perc_latino_2015[match(V(graph_states1115)$name, county_covariate$sendfips)])
+
+
+###########################################################################################################
+###########################################################################################################
+########################################### Data Visualization ############################################
+###########################################################################################################
+###########################################################################################################
+
+#1) Intra-state migration (Texas)
 
 # Plot a map of the united states:
 map("state", region="texas", col="grey20", fill=TRUE, bg="black", lwd=0.1)
-
-# Add a point on the map for each county
-#points(x=county_covariate$Longitude, y=county_covariate$Latitude, pch=19, 
-#       col="orange")
 
 #Generating color gradient for edges in the network 
 col.1 <- adjustcolor("orange red", alpha=0.4)
@@ -104,20 +195,16 @@ col.2 <- adjustcolor("orange", alpha=0.4)
 edge.pal <- colorRampPalette(c(col.1, col.2), alpha = TRUE)
 edge.col <- edge.pal(100)
 
-#Generating shortest distance "arcs"
-#Ex: Alabama (sending and receiving)
-#states1115_alabama_complete <-subset(states1115_migration_complete, states1115_migration_complete$state==1)
-#states1115_alabama_complete$movers <- as.numeric(as.factor(states1115_alabama_complete$movers))
 
-#Within Texas Migration
+#Within Texas Migration (data prep)
+
 #Subset all migration to and from Texas Counties 
 states1115_texas_complete <-subset(states1115_migration_complete, states1115_migration_complete$state==48)
-#Intra-texas migration
 states1115_texas_complete <- states1115_texas_complete[grepl("^48[0-9]", states1115_texas_complete$sendfips), ]
 states1115_texas_complete <- states1115_texas_complete[grepl("^48[0-9]", states1115_texas_complete$recfips), ]
-
 states1115_texas_complete$movers <- as.numeric(as.factor(states1115_texas_complete$movers))
 
+#Generating shortest distance "arcs"
 for(i in 1:nrow(states1115_texas_complete))  {
   node1 <- county_covariate[county_covariate$sendfips == states1115_texas_complete[i,]$sendfips,]
   node2 <- county_covariate[county_covariate$sendfips == states1115_texas_complete[i,]$recfips,]
@@ -129,5 +216,88 @@ for(i in 1:nrow(states1115_texas_complete))  {
   
   lines(arc, col=edge.col[edge.ind], lwd=edge.ind/30)
 }
+
+#Saving image
+dev.copy(png,"texas.png",width=8,height=6,units="in",res=100)
+dev.off()
+
+
+#2) Migration to Colorado (data prep)
+states1115_migration_to_colorado <- states1115_migration_complete[grepl("^8[0-9]", states1115_migration_complete$recfips), ] 
+states1115_migration_to_colorado$movers <- as.numeric(as.factor(states1115_migration_to_colorado$movers ))
+  
+#Plot map of the United States
+map("state", col="grey20", fill=TRUE, bg="black", lwd=0.1)
+
+#Show migration to Colorado from all other counties in the U.S. 
+for(i in 1:nrow(states1115_migration_to_colorado))  {
+  node1 <- county_covariate[county_covariate$sendfips == states1115_migration_to_colorado[i,]$sendfips,]
+  node2 <- county_covariate[county_covariate$sendfips == states1115_migration_to_colorado[i,]$recfips,]
+  
+  arc <- gcIntermediate( c(node1[1,]$Longitude, node1[1,]$Latitude), 
+                         c(node2[1,]$Longitude, node2[1,]$Latitude), 
+                         n=100, addStartEnd=TRUE )
+  edge.ind <- round(10*states1115_migration_to_colorado[i,]$movers / max(states1115_migration_to_colorado$movers))
+  
+  lines(arc, col=edge.col[edge.ind], lwd=edge.ind/30)
+}
+
+# Save image
+dev.copy(png,"colorado.png",width=8,height=6,units="in",res=100)
+dev.off()
+
+#Migration from counties in NYC (all five boroughs) to other parts of the country (data prep)
+states1115_migration_from_ny <- states1115_migration_complete[states1115_migration_complete$sendfips %in% c("36005", "36047", "36061", "36081", "36085"), ] 
+states1115_migration_from_ny$movers <- as.numeric(as.factor(states1115_migration_from_ny$movers))
+
+#Loading map
+map("state", col="grey20", fill=TRUE, bg="black", lwd=0.1)
+
+#Generating weighted edges 
+for(i in 1:nrow(states1115_migration_from_ny))  {
+  node1 <- states1115_migration_complete[states1115_migration_complete$sendfips == states1115_migration_from_ny[i,]$sendfips,]
+  node2 <- states1115_migration_complete[states1115_migration_complete$sendfips == states1115_migration_from_ny[i,]$recfips,]
+  
+  arc <- gcIntermediate( c(node1[1,]$Longitude, node1[1,]$Latitude), 
+                         c(node2[1,]$Longitude, node2[1,]$Latitude), 
+                         n=1000, addStartEnd=TRUE )
+  edge.ind <- round(25*states1115_migration_from_ny[i,]$movers / max(states1115_migration_from_ny$movers))
+  
+  lines(arc, col=edge.col[edge.ind], lwd=edge.ind/30)
+}
+
+#Save image
+dev.copy(png,"nyc.png",width=8,height=6,units="in",res=100)
+dev.off()
+
+
+#########################################################################################################
+############################### Centralization Measures ################################################
+#########################################################################################################
+
+#1) Centralization 
+Cd <- function(g) {
+  n <- igraph::vcount(g)
+  sum(max(igraph::degree(g)) - igraph::degree(g))/((n-1)*(n-2))
+}
+
+Cd(graph_states1115)
+
+#2) Prestige
+#a) Declare igraph object a network object
+net_migration_states1115 <-intergraph::asNetwork(graph_states1115)
+
+#b) Degree prestige (Receiving more migration from others)
+degree_prestige <- sna::prestige(net_migration_states1115, cmode="indegree")
+
+#c) Proximity prestige (More nodes can reach i via shortest paths)
+sna::prestige(net_migration_states1115, cmode="domain.proximity")
+
+#d) Status or rank prestige(sum of prestige of neighbors pointing to node)
+rank_presitge <- sna::prestige(net_migration_states1115, cmode="eigenvector")
+
+
+
+
 
 
