@@ -98,7 +98,7 @@ county_covariate <- subset(county_covariate, county_covariate$state!=2)
 county_covariate <- subset(county_covariate, county_covariate$state!=15)
 
 #Merging migration information with covariate data
-states1115_migration_covariate <- merge(migration_1115, county_covariate, by="sendfips", all.x=T)
+states1115_migration_complete <- merge(migration_1115, county_covariate, by="sendfips", all.x=T)
 ```
 
 The structure of the data is as follows:
@@ -207,7 +207,7 @@ V(graph_states1115)$perc_latino_2015 = as.character(county_covariate$perc_latino
 After I construct the data in this manner, I can visualize the data in a number of ways: 
 
 1. Within state migration (e.g. Texas)
-```{r, results="hide"}
+```{r, results="hide", echo=F, eval=F}
 #Subset all migration to and from Texas Counties 
 states1115_texas_complete <-subset(states1115_migration_covariate, states1115_migration_covariate$state==48)
 
@@ -297,34 +297,65 @@ for(i in 1:nrow(states1115_migration_from_ny))  {
 
 ![](/Users/taylormattia/Dropbox/github/Migration Data/nyc.png)
 
-## Summary Statistics
+## Summary Statistics (total migration)
 1) Number of Degrees (number of people who moved in and out of a country):
 ```{r}
 degree_weighted <- strength(graph_states1115)
-head(sort(degree_weighted, decreasing=T), n = 10)
-```
-
-
-2) Number of In Degrees (number of people who moved into a county):
-```{r}
-in_degree_weighted <-strength(graph_states1115, mode=c("in"))
-head(sort(in_degree_weighted, decreasing=T), n=10)
-```
-
-3) Number of Out Degrees (number of people who moved out of a county):
-```{r}
-out_degree_weighted <-strength(graph_states1115, mode=c("out"))
-head(sort(out_degree_weighted, decreasing=T), n=10)
-```
-4) Eigenvector Centrality 
-```{r, message=F, warning=F}
-eigen_centrality <- eigen_centrality(graph_states1115, directed=T, weights=E(graph_states1115)$weight)$vector
 ```
 
 ```{r, echo=F, include=F}
 node_county_names <- V(graph_states1115)$county_name 
 node_state_names <- V(graph_states1115)$state_name
 
+degree_weighted_display <- rbind(degree_weighted, node_county_names, node_state_names)
+degree_weighted_display_transpose <- t(degree_weighted_display)
+degree_weighted_data <- as.data.frame(degree_weighted_display_transpose, stringsAsFactors=F)
+degree_weighted_data$degree_weighted <- as.numeric(as.character(degree_weighted_data$degree_weighted))
+```
+
+```{r}
+head(dplyr::arrange(degree_weighted_data, desc(degree_weighted)), n = 10)
+```
+
+
+2) Number of In Degrees (number of people who moved into a county):
+```{r}
+in_degree_weighted <-strength(graph_states1115, mode=c("in"))
+```
+
+```{r, echo=F, include=F}
+in_degree_weighted_display <- rbind(in_degree_weighted, node_county_names, node_state_names)
+in_degree_weighted_display_transpose <- t(in_degree_weighted_display)
+in_degree_weighted_data <- as.data.frame(in_degree_weighted_display_transpose, stringsAsFactors=F)
+in_degree_weighted_data$in_degree_weighted <- as.numeric(as.character(in_degree_weighted_data$in_degree_weighted))
+```
+
+```{r}
+head(dplyr::arrange(in_degree_weighted_data, desc(in_degree_weighted)), n = 10)
+```
+
+3) Number of Out Degrees (number of people who moved out of a county):
+```{r}
+out_degree_weighted <-strength(graph_states1115, mode=c("out"))
+```
+
+```{r, echo=F, include=F}
+out_degree_weighted_display <- rbind(out_degree_weighted, node_county_names, node_state_names)
+out_degree_weighted_display_transpose <- t(out_degree_weighted_display)
+out_degree_weighted_data <- as.data.frame(out_degree_weighted_display_transpose, stringsAsFactors=F)
+out_degree_weighted_data$out_degree_weighted <- as.numeric(as.character(out_degree_weighted_data$out_degree_weighted))
+```
+
+```{r}
+head(dplyr::arrange(in_degree_weighted_data, desc(in_degree_weighted)), n = 10)
+```
+
+4) Eigenvector Centrality 
+```{r, message=F, warning=F}
+eigen_centrality <- eigen_centrality(graph_states1115, directed=T, weights=E(graph_states1115)$weight)$vector
+```
+
+```{r, echo=F, include=F}
 eigen_centrality_display <- rbind(eigen_centrality, node_county_names, node_state_names)
 eigen_centrality_display_transpose <- t(eigen_centrality_display)
 eigen_centrality_data <- as.data.frame(eigen_centrality_display_transpose, stringsAsFactors=F)
@@ -369,6 +400,72 @@ rank_prestige_data$rank_presitge <- as.numeric(as.character(rank_prestige_data$r
 
 ```{r, echo=F}
 head(dplyr::arrange(rank_prestige_data, desc(rank_presitge)), n = 10)
+```
+
+##Summary statistics (migration per capita)
+While looking at aggregate migration is helpful, it is also useful to know how many people are moving from County A to County B as a function of the number of people who live in each county (migration per capita):
+
+1) Total Degree
+```{r, echo=F, include=F, message=F, warning=F}
+#Creating movers per capita varaible 
+as.numeric.factor <- function(x) {as.numeric(levels(x))[x]}
+
+states1115_migration_complete$movers_numeric <- as.numeric.factor(states1115_migration_complete$movers)
+states1115_migration_complete <- transform(states1115_migration_complete, movers_per_capita = movers_numeric / total_pop_2010)
+
+#Creating edgelist from data
+edgelist_states1115_per_capita <- as.matrix(states1115_migration_complete)
+
+#Creating graph from the edgelist
+graph_states1115_per_capita = graph.edgelist(edgelist_states1115_per_capita[,1:2], directed=T)
+
+#Adding weights 
+E(graph_states1115)$weight = as.numeric(edgelist_states1115_per_capita[,83])
+```
+
+```{r, echo=F, include=F}
+degree_per_capita_weighted <- strength(graph_states1115_per_capita)
+
+
+degree_per_capita_display <- rbind(degree_per_capita_weighted, node_county_names, node_state_names)
+degree_per_capita_display_transpose <- t(degree_per_capita_display)
+degree_per_capita_data <- as.data.frame(degree_per_capita_display_transpose, stringsAsFactors=F)
+
+degree_per_capita_data$degree_per_capita_weighted <- as.numeric(as.character(degree_per_capita_data$degree_per_capita_weighted ))
+```
+
+```{r}
+head(dplyr::arrange(degree_per_capita_data, desc(degree_per_capita_weighted)), n = 10)
+```
+
+2) In Degree
+```{r}
+in_degree_per_capita_weighted <- strength(graph_states1115_per_capita, mode=c("in"))
+
+
+in_degree_per_capita_display <- rbind(in_degree_per_capita_weighted, node_county_names, node_state_names)
+in_degree_per_capita_display_transpose <- t(in_degree_per_capita_display)
+in_degree_per_capita_data <- as.data.frame(in_degree_per_capita_display_transpose, stringsAsFactors=F)
+
+in_degree_per_capita_data$in_degree_per_capita_weighted <- as.numeric(as.character(in_degree_per_capita_data$in_degree_per_capita_weighted ))
+```
+
+```{r}
+head(dplyr::arrange(in_degree_per_capita_data, desc(in_degree_per_capita_weighted)), n = 10)
+```
+3) Out Degree
+```{r}
+out_degree_per_capita_weighted <- strength(graph_states1115_per_capita, mode=c("out"))
+
+out_degree_per_capita_display <- rbind(out_degree_per_capita_weighted, node_county_names, node_state_names)
+out_degree_per_capita_display_transpose <- t(out_degree_per_capita_display)
+out_degree_per_capita_data <- as.data.frame(out_degree_per_capita_display_transpose, stringsAsFactors=F)
+
+out_degree_per_capita_data$out_degree_per_capita_weighted <- as.numeric(as.character(out_degree_per_capita_data$out_degree_per_capita_weighted))
+```
+
+```{r}
+head(dplyr::arrange(out_degree_per_capita_data, desc(out_degree_per_capita_weighted)), n = 10)
 ```
 
 ## ERGM Models

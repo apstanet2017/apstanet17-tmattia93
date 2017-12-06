@@ -343,6 +343,44 @@ eigen_centrality_data$eigen_centrality <- as.numeric(as.character(eigen_centrali
 
 head(dplyr::arrange(eigen_centrality_data, desc(eigen_centrality)), n = 10)
 
+
+#########################################################################################################
+############################### Centralization Measures ################################################
+############################### (% of total population) ################################################
+#########################################################################################################
+as.numeric.factor <- function(x) {as.numeric(levels(x))[x]}
+
+states1115_migration_complete$movers_numeric <- as.numeric.factor(states1115_migration_complete$movers)
+states1115_migration_complete <- transform(states1115_migration_complete, movers_per_capita = movers_numeric / total_pop_2010)
+
+#Creating edgelist from data
+edgelist_states1115_per_capita <- as.matrix(states1115_migration_complete)
+dim(edgelist_states1115_per_capita)
+
+#Creating graph from the edgelist
+graph_states1115_per_capita = graph.edgelist(edgelist_states1115_per_capita[,1:2], directed=T)
+
+#Adding weights 
+E(graph_states1115)$weight = as.numeric(edgelist_states1115_per_capita[,83])
+
+
+#Degree (per capita)
+degree_per_capita_weighted <- strength(graph_states1115_per_capita)
+head(sort(degree_per_capita_weighted, decreasing=T), n = 10)
+
+degree_per_capita_display <- rbind(degree_per_capita_weighted, node_county_names, node_state_names)
+degree_per_capita_display_transpose <- t(degree_per_capita_display)
+degree_per_capita_data <- as.data.frame(degree_per_capita_display_transpose, stringsAsFactors=F)
+
+degree_per_capita_data$degree_per_capita_weighted <- as.numeric(as.character(degree_per_capita_data$degree_per_capita_weighted ))
+
+head(dplyr::arrange(degree_per_capita_data, desc(degree_per_capita_weighted)), n = 10)
+
+#In degree (per capita)
+
+
+#Out degree(per capita)
+
 #########################################################################################################
 ############################################ ERGM MODEL  ################################################
 #########################################################################################################
@@ -442,9 +480,4 @@ test <- gergm(formula,
 #verbose=TRUE)
 
 
-```{r, echo=F, include=F, results="hide"}
-image3_path <- '~/Dropbox/github/Migration Data/nyc.png'
-image3 <-readPNG(image3_path, native=T, info=F)
-include_graphics(image3_path)
-```
 

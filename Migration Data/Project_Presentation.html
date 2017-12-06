@@ -162,15 +162,6 @@ E(graph_states1115)$weight = as.numeric(edgelist_states1115[,3])</code></pre>
 <ol style="list-style-type: decimal">
 <li>Within state migration (e.g. Texas)</li>
 </ol>
-<pre class="r"><code>#Subset all migration to and from Texas Counties 
-states1115_texas_complete &lt;-subset(states1115_migration_covariate, states1115_migration_covariate$state==48)
-
-#Intra-texas migration
-states1115_texas_complete &lt;- states1115_texas_complete[grepl(&quot;^48[0-9]&quot;, states1115_texas_complete$sendfips), ]
-states1115_texas_complete &lt;- states1115_texas_complete[grepl(&quot;^48[0-9]&quot;, states1115_texas_complete$recfips), ]
-
-#Making weighted edge numeric for the purposes of plotting
-states1115_texas_complete$movers &lt;- as.numeric(as.factor(states1115_texas_complete$movers))</code></pre>
 <pre class="r"><code># Plot a map of the united states:
 map(&quot;state&quot;, region=&quot;texas&quot;, col=&quot;grey20&quot;, fill=TRUE, bg=&quot;black&quot;, lwd=0.1)
 
@@ -211,29 +202,56 @@ for(i in 1:nrow(states1115_texas_complete))  {
 
 </div>
 </div>
-<div id="summary-statistics" class="section level2">
-<h2>Summary Statistics</h2>
+<div id="summary-statistics-total-migration" class="section level2">
+<h2>Summary Statistics (total migration)</h2>
 <ol style="list-style-type: decimal">
 <li>Number of Degrees (number of people who moved in and out of a country):</li>
 </ol>
-<pre class="r"><code>degree_weighted &lt;- strength(graph_states1115)
-head(sort(degree_weighted, decreasing=T), n = 10)</code></pre>
-<pre><code>##   6037  17031  48201   4013   6073  48113   6059  36061   6071   6065 
-## 518973 344433 329260 328300 265779 244668 231060 224610 210670 209982</code></pre>
+<pre class="r"><code>degree_weighted &lt;- strength(graph_states1115)</code></pre>
+<pre class="r"><code>head(dplyr::arrange(degree_weighted_data, desc(degree_weighted)), n = 10)</code></pre>
+<pre><code>##    degree_weighted     node_county_names node_state_names
+## 1           518973    Los Angeles County               CA
+## 2           344433           Cook County               IL
+## 3           329260         Harris County               TX
+## 4           328300       Maricopa County               AZ
+## 5           265779      San Diego County               CA
+## 6           244668         Dallas County               TX
+## 7           231060         Orange County               CA
+## 8           224610       New York County               NY
+## 9           210670 San Bernardino County               CA
+## 10          209982      Riverside County               CA</code></pre>
 <ol start="2" style="list-style-type: decimal">
 <li>Number of In Degrees (number of people who moved into a county):</li>
 </ol>
-<pre class="r"><code>in_degree_weighted &lt;-strength(graph_states1115, mode=c(&quot;in&quot;))
-head(sort(in_degree_weighted, decreasing=T), n=10)</code></pre>
-<pre><code>##   6037   4013  48201  17031   6073   6065  48113   6059   6071  53033 
-## 214019 170622 164715 140112 116646 113392 112609 109888 109425 107177</code></pre>
+<pre class="r"><code>in_degree_weighted &lt;-strength(graph_states1115, mode=c(&quot;in&quot;))</code></pre>
+<pre class="r"><code>head(dplyr::arrange(in_degree_weighted_data, desc(in_degree_weighted)), n = 10)</code></pre>
+<pre><code>##    in_degree_weighted     node_county_names node_state_names
+## 1              214019    Los Angeles County               CA
+## 2              170622       Maricopa County               AZ
+## 3              164715         Harris County               TX
+## 4              140112           Cook County               IL
+## 5              116646      San Diego County               CA
+## 6              113392      Riverside County               CA
+## 7              112609         Dallas County               TX
+## 8              109888         Orange County               CA
+## 9              109425 San Bernardino County               CA
+## 10             107177           King County               WA</code></pre>
 <ol start="3" style="list-style-type: decimal">
 <li>Number of Out Degrees (number of people who moved out of a county):</li>
 </ol>
-<pre class="r"><code>out_degree_weighted &lt;-strength(graph_states1115, mode=c(&quot;out&quot;))
-head(sort(out_degree_weighted, decreasing=T), n=10)</code></pre>
-<pre><code>##   6037  17031  48201   4013   6073  48113   6059  36047  36061  53033 
-## 304954 204321 164545 157678 149133 132059 121172 120911 120306 101806</code></pre>
+<pre class="r"><code>out_degree_weighted &lt;-strength(graph_states1115, mode=c(&quot;out&quot;))</code></pre>
+<pre class="r"><code>head(dplyr::arrange(in_degree_weighted_data, desc(in_degree_weighted)), n = 10)</code></pre>
+<pre><code>##    in_degree_weighted     node_county_names node_state_names
+## 1              214019    Los Angeles County               CA
+## 2              170622       Maricopa County               AZ
+## 3              164715         Harris County               TX
+## 4              140112           Cook County               IL
+## 5              116646      San Diego County               CA
+## 6              113392      Riverside County               CA
+## 7              112609         Dallas County               TX
+## 8              109888         Orange County               CA
+## 9              109425 San Bernardino County               CA
+## 10             107177           King County               WA</code></pre>
 <ol start="4" style="list-style-type: decimal">
 <li>Eigenvector Centrality</li>
 </ol>
@@ -282,6 +300,70 @@ degree_prestige &lt;- sna::prestige(net_migration_states1115, cmode=&quot;indegr
 ## 8     0.08280435    Richland County               SC
 ## 9     0.08047003      Dallas County               TX
 ## 10    0.07891234        King County               WA</code></pre>
+</div>
+<div id="summary-statistics-migration-per-capita" class="section level2">
+<h2>Summary statistics (migration per capita)</h2>
+<p>While looking at aggregate migration is helpful, it is also useful to know how many people are moving from County A to County B as a function of the number of people who live in each county (migration per capita):</p>
+<ol style="list-style-type: decimal">
+<li>Total Degree</li>
+</ol>
+<pre class="r"><code>head(dplyr::arrange(degree_per_capita_data, desc(degree_per_capita_weighted)), n = 10)</code></pre>
+<pre><code>##    degree_per_capita_weighted     node_county_names node_state_names
+## 1                        2187        Laurens County               GA
+## 2                        1916      Jefferson County               AL
+## 3                        1913 San Bernardino County               CA
+## 4                        1776           Bond County               IL
+## 5                        1774         DeKalb County               AL
+## 6                        1550        Orleans Parish               LA
+## 7                        1489         Greene County               IN
+## 8                        1487     Washington County               MS
+## 9                        1400        Manatee County               FL
+## 10                       1297        Clinton County               MI</code></pre>
+<ol start="2" style="list-style-type: decimal">
+<li>In Degree</li>
+</ol>
+<pre class="r"><code>in_degree_per_capita_weighted &lt;- strength(graph_states1115_per_capita, mode=c(&quot;in&quot;))
+
+
+in_degree_per_capita_display &lt;- rbind(in_degree_per_capita_weighted, node_county_names, node_state_names)
+in_degree_per_capita_display_transpose &lt;- t(in_degree_per_capita_display)
+in_degree_per_capita_data &lt;- as.data.frame(in_degree_per_capita_display_transpose, stringsAsFactors=F)
+
+in_degree_per_capita_data$in_degree_per_capita_weighted &lt;- as.numeric(as.character(in_degree_per_capita_data$in_degree_per_capita_weighted ))</code></pre>
+<pre class="r"><code>head(dplyr::arrange(in_degree_per_capita_data, desc(in_degree_per_capita_weighted)), n = 10)</code></pre>
+<pre><code>##    in_degree_per_capita_weighted     node_county_names node_state_names
+## 1                            990        Laurens County               GA
+## 2                            807      Jefferson County               AL
+## 3                            797 San Bernardino County               CA
+## 4                            774           Bond County               IL
+## 5                            759         DeKalb County               AL
+## 6                            731         Greene County               IN
+## 7                            693           Polk County               GA
+## 8                            688        Orleans Parish               LA
+## 9                            675     Washington County               MS
+## 10                           638        Manatee County               FL</code></pre>
+<ol start="3" style="list-style-type: decimal">
+<li>Out Degree</li>
+</ol>
+<pre class="r"><code>out_degree_per_capita_weighted &lt;- strength(graph_states1115_per_capita, mode=c(&quot;out&quot;))
+
+out_degree_per_capita_display &lt;- rbind(out_degree_per_capita_weighted, node_county_names, node_state_names)
+out_degree_per_capita_display_transpose &lt;- t(out_degree_per_capita_display)
+out_degree_per_capita_data &lt;- as.data.frame(out_degree_per_capita_display_transpose, stringsAsFactors=F)
+
+out_degree_per_capita_data$out_degree_per_capita_weighted &lt;- as.numeric(as.character(out_degree_per_capita_data$out_degree_per_capita_weighted))</code></pre>
+<pre class="r"><code>head(dplyr::arrange(out_degree_per_capita_data, desc(out_degree_per_capita_weighted)), n = 10)</code></pre>
+<pre><code>##    out_degree_per_capita_weighted     node_county_names node_state_names
+## 1                            1197        Laurens County               GA
+## 2                            1116 San Bernardino County               CA
+## 3                            1109      Jefferson County               AL
+## 4                            1015         DeKalb County               AL
+## 5                            1002           Bond County               IL
+## 6                             862        Orleans Parish               LA
+## 7                             812     Washington County               MS
+## 8                             762        Manatee County               FL
+## 9                             758         Greene County               IN
+## 10                            710     St. Landry Parish               LA</code></pre>
 </div>
 <div id="ergm-models" class="section level2">
 <h2>ERGM Models</h2>
