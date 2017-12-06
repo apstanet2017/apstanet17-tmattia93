@@ -26,6 +26,13 @@ library(intergraph)
 library(ergm)
 library(maps)
 library(geosphere)
+library(ergm.count)
+library(ergm.rank)
+library(GERGM)
+library(bootnet)
+library(glasso)
+library(qgraph)
+
 
 #Set working directory
 setwd('~/Dropbox/github/Migration Data')
@@ -118,6 +125,7 @@ V(graph_states1115)$hhincome_2012 = as.character(county_covariate$hhincome_2012[
 V(graph_states1115)$hhincome_2013 = as.character(county_covariate$hhincome_2013[match(V(graph_states1115)$name, county_covariate$sendfips)])
 V(graph_states1115)$hhincome_2014 = as.character(county_covariate$hhincome_2013[match(V(graph_states1115)$name, county_covariate$sendfips)])
 V(graph_states1115)$hhincome_2015 = as.character(county_covariate$hhincome_2013[match(V(graph_states1115)$name, county_covariate$sendfips)])
+
 
 #Unemployment rate (2009 - 2015)
 V(graph_states1115)$unemployment_rate_2009 = as.character(county_covariate$unemploymentrate_2009[match(V(graph_states1115)$name, county_covariate$sendfips)])
@@ -279,13 +287,15 @@ Cd <- function(g) {
 }
 
 Cd(graph_states1115)
-sna::centralization(net_migration_states1115, degree)
 
 #2) Prestige
-#a) Declare igraph object a network object
-net_migration_states1115 <-intergraph::asNetwork(graph_states1115)
+#Declare igraph object a network object
+net_migration_states1115 <-intergraph::asNetwork(graph_states1115,
+                                                 ignore.eval=FALSE,
+                                                 names.eval='weight')
 
-#b) Degree prestige (Receiving more migration from others)
+                                    
+#a) Degree prestige (Receiving more migration from others)
 degree_prestige <- sna::prestige(net_migration_states1115, cmode="indegree")
 node_county_names <- V(graph_states1115)$county_name 
 node_state_names <- V(graph_states1115)$state_name
@@ -295,16 +305,11 @@ degree_prestige_display_transpose <- t(degree_prestige_display)
 degree_prestige_data <- as.data.frame(degree_prestige_display_transpose, stringsAsFactors = F)
 degree_prestige_data$degree_prestige <- as.numeric(as.character(degree_prestige_data$degree_prestige))
 
-
+#Displaying results
 head(dplyr::arrange(degree_prestige_data, desc(degree_prestige)), n = 10)
 
-#Displaying results
 
-#c) Proximity prestige (More nodes can reach i via shortest paths)
-proximity_prestige <- sna::prestige(net_migration_states1115, cmode="domain.proximity")
-
-
-#d) Status or rank prestige(sum of prestige of neighbors pointing to node)
+#b) Status or rank prestige(sum of prestige of neighbors pointing to node)
 rank_presitge <- sna::prestige(net_migration_states1115, cmode="eigenvector")
 
 rank_prestige_display <- rbind(rank_presitge, node_county_names, node_state_names)
@@ -315,22 +320,21 @@ rank_prestige_data$rank_presitge <- as.numeric(as.character(rank_prestige_data$r
 head(dplyr::arrange(rank_prestige_data, desc(rank_presitge)), n = 10)
 
 #3) Weighted measures
-#Degree of each county (total)
+#a) Degree of each county (total)
 degree_weighted <- strength(graph_states1115)
 head(sort(degree_weighted, decreasing=T), n = 10)
 
 
-#In-degree
+#b)In-degree
 in_degree_weighted <-strength(graph_states1115, mode=c("in"))
 head(sort(in_degree_weighted, decreasing=T), n=10)
 
-#Out-degree
+#c) Out-degree
 out_degree_weighted <-strength(graph_states1115, mode=c("out"))
 head(sort(out_degree_weighted, decreasing=T), n=10)
 
 #4) Centrality
 eigen_centrality <- eigen_centrality(graph_states1115, directed=T, weights=E(graph_states1115)$weight)$vector
-
 
 eigen_centrality_display <- rbind(eigen_centrality, node_county_names, node_state_names)
 eigen_centrality_display_transpose <- t(eigen_centrality_display)
@@ -338,3 +342,109 @@ eigen_centrality_data <- as.data.frame(eigen_centrality_display_transpose, strin
 eigen_centrality_data$eigen_centrality <- as.numeric(as.character(eigen_centrality_data$eigen_centrality))
 
 head(dplyr::arrange(eigen_centrality_data, desc(eigen_centrality)), n = 10)
+
+#########################################################################################################
+############################################ ERGM MODEL  ################################################
+#########################################################################################################
+
+
+
+############################
+#Sampling
+
+install.packages("ergm.rank")
+
+#Krivitsky and Butts (2013)
+
+as.mcmc.default <- coda:::as.mcmc.default
+as.mcmc.list.default <- coda:::as.mcmc.list.default
+
+#Converting attributes to numeric types
+net_migration_states1115 %v% "unemployment_rate_2010" <- as.numeric(net_migration_states1115 %v% "unemployment_rate_2010")
+net_migration_states1115 %v% "hhincome_2010" <- as.numeric(net_migration_states1115 %v% "hhincome_2010")
+net_migration_states1115 %v% "hs_gradrate_2010" <- as.numeric(net_migration_states1115 %v% "hs_gradrate_2010")
+net_migration_states1115 %v% "hh_poverty_rate_2010" <- as.numeric(net_migration_states1115 %v% "hh_poverty_rate_2010")
+net_migration_states1115 %v% "perc_white_2010" <- as.numeric(net_migration_states1115 %v% "perc_white_2010")
+net_migration_states1115 %v% "total_pop_2010" <- as.numeric(net_migration_states1115 %v% "total_pop_2010")
+
+
+#FULL MODEL: Covariates (in and out)
+model_sender_and_receiver <- net_migration_states1115 ~ edges + mutual +  nodeicov("unemployment_rate_2010") + nodeocov("unemployment_rate_2010")
+                                        + nodeicov("hhincome_2010") + nodeocov("hhincome_2010")
+                                        + nodeicov("hs_gradrate_2010") + nodeocov("hs_gradrate_2010")
+                                        + nodeicov("hh_poverty_rate_2010") + nodeocov("hh_poverty_rate_2010")
+                                        + nodeicov("perc_white_2010") + nodeocov("perc_white_2010")
+                                        + nodeicov("total_pop_2010") + nodeocov("total_pop_2010") + nodematch("state_name", diff=T) 
+
+
+model_absolute_difference <- net_migration_states1115 ~ edges + mutual + nodematch("state_name", diff=T) +
+                            + absdiff("unemployment_rate_2010") + absdifference("hhincome_2010") 
+                            + absdiff("hs_gradrate_2010") + absdifference("hh_poverty_rate_2010")
+                            + absdiff("perc_white_2010") + absdifference("total_pop_2010")
+
+#FULL MODEL: absolute difference        
+
+model_sender_and_receiver_fit <- ergm(model_sender_and_receiver,
+                        control=control.ergm(seed=1),
+                        response="weight",
+                        reference=~Poisson,
+                        verbose=T,
+                        eval.loglik=TRUE)
+
+
+
+model_absolute_difference_fit <- ergm(model_absolute_difference, 
+                                      control=control.ergm(seed=1),
+                                      response="weight",
+                                      reference=~Poisson,
+                                      verbose=T,
+                                      eval.loglik=TRUE)
+
+
+
+
+###########################################################################################################
+################################### GERGM MODEL (if time allows)  #########################################
+###########################################################################################################
+
+#Setting up data to be able to use with 'GERGM' package
+#Creating adjacecy matrix
+adjacency_matrix <-as.matrix(adjacency_matrix_states_1115)
+
+#Reformatting covariate information
+rownames(county_covariate) <- county_covariate[,1]
+county_covariate[,1] <- NULL
+
+#Remove spaces from row strings
+rownames(adjacency_matrix) <- gsub(" ", "", rownames(adjacency_matrix), fixed = TRUE)
+colnames(adjacency_matrix) <- gsub(" ", "", colnames(adjacency_matrix), fixed = TRUE)
+rownames(county_covariate) <- gsub(" ", "", rownames(county_covariate), fixed = TRUE)
+
+
+#Writing the formula
+formula <- adjacency_matrix ~ edges + mutual(alpha = 0.8) + sender("unemploymentrate_2010") + receiver("unemploymentrate_2010") 
+#+ nodematch("state", diff=T)
+
+#Ideal model I'd like to test 
+formula_ideal <- adjacency_matrix ~ edges + mutual(alpha = 0.8) + sender("unemploymentrate_2010") + receiver("unemploymentrate_2010")
++ sender("hhincome_2010") + receiver("hhincome_2010") +  sender("total_pop_2010") + receiver("total_pop_2010") +
+  sender("hs_gradrate_2010") + receiver("hs_gradrate2010") + nodematch("state", diff=T)
+
+#Testing the first model (taking forever to run)
+test <- gergm(formula,
+              covariate_data = county_covariate)
+#number_of_networks_to_simulate = 1)
+# thin = 1/100,
+#proposal_variance = 0.05,
+#MCMC_burnin = 50,
+#seed = 342,
+#convergence_tolerance = 0.5,
+#verbose=TRUE)
+
+
+```{r, echo=F, include=F, results="hide"}
+image3_path <- '~/Dropbox/github/Migration Data/nyc.png'
+image3 <-readPNG(image3_path, native=T, info=F)
+include_graphics(image3_path)
+```
+

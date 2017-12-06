@@ -18,8 +18,6 @@ rm(list = ls())
 ```
 
 ```{r, include=FALSE}
-library(png)
-library(knitr)
 library(sna)
 library(visNetwork)
 library(threejs)
@@ -37,9 +35,17 @@ library(plyr)
 library(statnet)
 library(igraph)
 library(network)
+library(sand)
+library(intergraph)
+library(ergm)
 library(maps)
 library(geosphere)
-library(png)
+library(ergm.count)
+library(ergm.rank)
+library(GERGM)
+library(bootnet)
+library(glasso)
+library(qgraph)
 ```
 
 ```{r include=FALSE}
@@ -57,7 +63,7 @@ migration_1115 <-get(load('states1115.Rdata'))
 county_covariate <-get(load('county_covariate.Rdata'))
 ```
 
-```{r, echo=FALSE, include=F}
+```{r, echo=FALSE, results="hide"}
 #Cleaning data to exclude Alaska and Hawaii
 #Merge covariate information with migration data 
 #Changing column name for merge
@@ -109,13 +115,14 @@ E(graph_states1115)$weight = as.numeric(edgelist_states1115[,3])
 ```
 
 I also added the following covariate information as vertex attributes from the U.S. Census, measured at the county level:
+
 * Location descriptors (county and state name, latitude, and longitude)
 * Household income (2009 - 2015)
 * High school graduation rates (2009-2015)
 * Household poverty rates (2009-2015)
 * Unemployment rate (2009 - 2015)
 * Total population (2010 - 2015)
-* Proportion of racial groups (2010 - 2015)
+* County-level populations by race (2010 - 2015)
 
 ```{r, echo=F, include=F}
 #Setting vertex attributes (nodal covariates)
@@ -200,7 +207,7 @@ V(graph_states1115)$perc_latino_2015 = as.character(county_covariate$perc_latino
 After I construct the data in this manner, I can visualize the data in a number of ways: 
 
 1. Within state migration (e.g. Texas)
-```{r, include=FALSE}
+```{r, results="hide"}
 #Subset all migration to and from Texas Counties 
 states1115_texas_complete <-subset(states1115_migration_covariate, states1115_migration_covariate$state==48)
 
@@ -236,14 +243,7 @@ for(i in 1:nrow(states1115_texas_complete))  {
 }
 ```
 
-
-```{r, echo=F}
-image1_path <- '~/Dropbox/github/Migration Data/texas.png'
-image1 <-readPNG(image1_path, native=T, info=F)
-include_graphics(image1_path)
-```
-
-
+![](/Users/taylormattia/Dropbox/github/Migration Data/texas.png)
 
 2. Migration to a particular location (i.e. Colorado)
 ```{r, eval=FALSE, echo = F}
@@ -268,11 +268,7 @@ for(i in 1:nrow(states1115_migration_to_colorado))  {
 }
 ```
 
-```{r, echo=F}
-image2_path <- '~/Dropbox/github/Migration Data/colorado.png'
-image2 <-readPNG(image2_path, native=T, info=F)
-include_graphics(image2_path)
-```
+![](/Users/taylormattia/Dropbox/github/Migration Data/colorado.png)
 
 
 3. Migration from a particular location (i.e. New York City)
@@ -299,14 +295,9 @@ for(i in 1:nrow(states1115_migration_from_ny))  {
 }
 ```
 
+![](/Users/taylormattia/Dropbox/github/Migration Data/nyc.png)
 
-```{r, echo=F}
-image3_path <- '~/Dropbox/github/Migration Data/nyc.png'
-image3 <-readPNG(image3_path, native=T, info=F)
-include_graphics(image3_path)
-```
-
-# Summary Statistics for the network
+## Summary Statistics
 1) Number of Degrees (number of people who moved in and out of a country):
 ```{r}
 degree_weighted <- strength(graph_states1115)
@@ -326,7 +317,7 @@ out_degree_weighted <-strength(graph_states1115, mode=c("out"))
 head(sort(out_degree_weighted, decreasing=T), n=10)
 ```
 4) Eigenvector Centrality 
-```{r, message=F}
+```{r, message=F, warning=F}
 eigen_centrality <- eigen_centrality(graph_states1115, directed=T, weights=E(graph_states1115)$weight)$vector
 ```
 
@@ -347,7 +338,9 @@ head(dplyr::arrange(eigen_centrality_data, desc(eigen_centrality)), n = 10)
 5) Degree Prestige (receiving many ties from other counties)
 
 ```{r}
-net_migration_states1115 <-intergraph::asNetwork(graph_states1115)
+net_migration_states1115 <-intergraph::asNetwork(graph_states1115, ignore.eval=FALSE,
+                                                 names.eval='weight')
+
 degree_prestige <- sna::prestige(net_migration_states1115, cmode="indegree")
 ```
 
@@ -376,4 +369,67 @@ rank_prestige_data$rank_presitge <- as.numeric(as.character(rank_prestige_data$r
 
 ```{r, echo=F}
 head(dplyr::arrange(rank_prestige_data, desc(rank_presitge)), n = 10)
+```
+
+## ERGM Models
+I am interested to see if the observed network can be predicted based on observable covariates. In particular, I am intersted to see whether:
+
+* County covariates themselves can predict where people move to and from (i.e. people move out of county A  because the high school graduation rate is low) or
+* Differences between counties matter (i.e. people move from county A to county B because county B has a lower unemployment rate compared to county B)
+
+These ERGM models are computationally intensive (and take quite a long time to run), so I will present the code I plan to use to test which model best fits the observed data:
+
+1. Define the function
++ Nodal Covariates ("Sender" and "Receiver")
+```{r, eval=F, results="hide"}
+model_sender_and_receiver <- net_migration_states1115 ~ edges + mutual  
+                                        + nodeicov("unemployment_rate_2010") + nodeocov("unemployment_rate_2010")
+                                        + nodeicov("hhincome_2010") + nodeocov("hhincome_2010")
+                                        + nodeicov("hs_gradrate_2010") + nodeocov("hs_gradrate_2010")
+                                        + nodeicov("hh_poverty_rate_2010") + nodeocov("hh_poverty_rate_2010")
+                                        + nodeicov("perc_white_2010") + nodeocov("perc_white_2010")
+                                        + nodeicov("total_pop_2010") + nodeocov("total_pop_2010") + 
+                                        nodematch("state_name", diff=T) 
+
+```
+
++ Difference in Nodal Covariates 
+```{r, eval=F, results="hide"}
+model_absolute_difference <- net_migration_states1115 ~ edges + mutual + nodematch("state_name", diff=T) +
+                            + absdiff("unemployment_rate_2010") + absdifference("hhincome_2010") 
+                            + absdiff("hs_gradrate_2010") + absdifference("hh_poverty_rate_2010")
+                            + absdiff("perc_white_2010") + absdifference("total_pop_2010")
+```
+
+2. Apply ERGM function to fit each model separately
+```{r, eval=F, results="hide"}
+model_sender_and_receiver_fit <- ergm(model_sender_and_receiver,
+                        control=control.ergm(seed=1),
+                        response="weight",
+                        reference=~Poisson,
+                        verbose=T,
+                        eval.loglik=TRUE)
+
+model_absolute_difference_fit <- ergm(model_absolute_difference, 
+                                      control=control.ergm(seed=1),
+                                      response="weight",
+                                      reference=~Poisson,
+                                      verbose=T,
+                                      eval.loglik=TRUE)
+```
+
+3. Simulate from each model fit
+```{r, eval=F, results="hide"}
+sender_and_receiver_sim <- simulate(model_sender_and_receiver_fit, nsims=100)
+
+absolute_difference_sim <- simulate(model_absolute_difference_fit, nsims=100)
+
+```
+4. Goodness of fit and MCMC Diagnostics 
+```{r, eval=F, results="hide"}
+model_sender_and_receiver_gof <- gof(model_sender_and_receiver_fit ~ model)
+model_absolute_difference_gof <- gof(model_absolute_difference_fit ~ model)
+
+mcmc.diagnostics(model_sender_and_receiver_fit)
+mcmc.diagnostics(model_absolute_difference_fit)
 ```
