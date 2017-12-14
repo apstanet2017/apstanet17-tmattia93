@@ -384,61 +384,85 @@ head(dplyr::arrange(degree_per_capita_data, desc(degree_per_capita_weighted)), n
 #########################################################################################################
 ############################################ ERGM MODEL  ################################################
 #########################################################################################################
-
-
-
 ############################
 #Sampling
+states1115$movers <- as.character(states1115$movers)
+states1115$movers <- as.numeric(as.character(states1115$movers))
 
-install.packages("ergm.rank")
-
-#Krivitsky and Butts (2013)
-
-as.mcmc.default <- coda:::as.mcmc.default
-as.mcmc.list.default <- coda:::as.mcmc.list.default
+net_migration_states1115 <-intergraph::asNetwork(graph_states1115)
 
 #Converting attributes to numeric types
 net_migration_states1115 %v% "unemployment_rate_2010" <- as.numeric(net_migration_states1115 %v% "unemployment_rate_2010")
 net_migration_states1115 %v% "hhincome_2010" <- as.numeric(net_migration_states1115 %v% "hhincome_2010")
-net_migration_states1115 %v% "hs_gradrate_2010" <- as.numeric(net_migration_states1115 %v% "hs_gradrate_2010")
 net_migration_states1115 %v% "hh_poverty_rate_2010" <- as.numeric(net_migration_states1115 %v% "hh_poverty_rate_2010")
 net_migration_states1115 %v% "perc_white_2010" <- as.numeric(net_migration_states1115 %v% "perc_white_2010")
+net_migration_states1115 %v% "perc_black_2010" <- as.numeric(net_migration_states1115 %v% "perc_black_2010")
+net_migration_states1115 %v% "perc_latino_2010" <- as.numeric(net_migration_states1115 %v% "perc_latino_2010")
 net_migration_states1115 %v% "total_pop_2010" <- as.numeric(net_migration_states1115 %v% "total_pop_2010")
 
 
-#FULL MODEL: Covariates (in and out)
-model_sender_and_receiver <- net_migration_states1115 ~ edges + mutual +  nodeicov("unemployment_rate_2010") + nodeocov("unemployment_rate_2010")
-                                        + nodeicov("hhincome_2010") + nodeocov("hhincome_2010")
-                                        + nodeicov("hs_gradrate_2010") + nodeocov("hs_gradrate_2010")
-                                        + nodeicov("hh_poverty_rate_2010") + nodeocov("hh_poverty_rate_2010")
-                                        + nodeicov("perc_white_2010") + nodeocov("perc_white_2010")
-                                        + nodeicov("total_pop_2010") + nodeocov("total_pop_2010") + nodematch("state_name", diff=T) 
+#1) Covariates (in and out)
 
-
-model_absolute_difference <- net_migration_states1115 ~ edges + mutual + nodematch("state_name", diff=T) +
-                            + absdiff("unemployment_rate_2010") + absdifference("hhincome_2010") 
-                            + absdiff("hs_gradrate_2010") + absdifference("hh_poverty_rate_2010")
-                            + absdiff("perc_white_2010") + absdifference("total_pop_2010")
-
-#FULL MODEL: absolute difference        
-
-model_sender_and_receiver_fit <- ergm(model_sender_and_receiver,
-                        control=control.ergm(seed=1),
-                        response="weight",
-                        reference=~Poisson,
-                        verbose=T,
-                        eval.loglik=TRUE)
+#Inital model used for coefficeints
+model_sender_and_receiver_fit_1 <- ergm((net_migration_states1115 ~ edges +  nodeicov("unemployment_rate_2010") + nodeocov("unemployment_rate_2010")
+                                         + nodeicov("hhincome_2010") + nodeocov("hhincome_2010")
+                                         + nodeicov("hh_poverty_rate_2010") + nodeocov("hh_poverty_rate_2010")
+                                         + nodeicov("perc_white_2010") + nodeocov("perc_white_2010")
+                                         + nodeicov("total_pop_2010") + nodeocov("total_pop_2010") +
+                                         + nodeicov("perc_black_2010") + nodeocov("perc_black_2010") +
+                                         + nodeicov("perc_latino_2010") + nodeocov("perc_latino_2010") + 
+                                         + nodematch("state_name", diff=F)), 
+                                         response="weight",
+                                         control = control.ergm(MCMLE.steplength.margin=0.25), 
+                                         reference=~Poisson,
+                                         eval.loglik=TRUE)
 
 
 
-model_absolute_difference_fit <- ergm(model_absolute_difference, 
-                                      control=control.ergm(seed=1),
+#Preferred model 
+model_sender_and_receiver_fit_2 <- ergm((net_migration_states1115 ~ edges +  nodeicov("unemployment_rate_2010") + nodeocov("unemployment_rate_2010")
+                                         + nodeicov("hhincome_2010") + nodeocov("hhincome_2010")
+                                         + nodeicov("hh_poverty_rate_2010") + nodeocov("hh_poverty_rate_2010")
+                                         + nodeicov("perc_white_2010") + nodeocov("perc_white_2010")
+                                         + nodeicov("total_pop_2010") + nodeocov("total_pop_2010") +
+                                         + nodeicov("perc_black_2010") + nodeocov("perc_black_2010") +
+                                         + nodeicov("perc_latino_2010") + nodeocov("perc_latino_2010") + 
+                                         + nodematch("state_name", diff=F)), 
+                                         response="weight",
+                                         control = control.ergm(init=coef(model_sender_and_receiver_fit_1),
+                                                                MCMLE.steplength.margin=0.25,
+                                                                MCMC.samplesize=50000,
+                                                                MCMC.interval=5000),
+                                          reference=~Poisson,
+                                          eval.loglik=TRUE)
+#2)Absolute Difference Model
+                                              
+#Inital model used for coefficeints
+model_absolute_difference_fit_1 <- ergm((net_migration_states1115 ~ edges +
+                                           + absdiff("unemployment_rate_2010") + absdiff("hhincome_2010") 
+                                         + absdiff("hh_poverty_rate_2010")
+                                         + absdiff("perc_white_2010") + absdiff("total_pop_2010")
+                                         + absdiff("perc_black_2010") + absdiff("perc_black_2010") +
+                                           + nodematch("state_name", diff=F)),
+                                        response="weight",
+                                        control =  control = control.ergm(MCMLE.steplength.margin=0.25)
+                                        reference=~Poisson,
+                                        eval.loglik=TRUE)
+#Model for inference
+model_absolute_difference_fit_2 <- ergm((net_migration_states1115 ~ edges +
+                                      + absdiff("unemployment_rate_2010") + absdiff("hhincome_2010") 
+                                      + absdiff("hh_poverty_rate_2010")
+                                      + absdiff("perc_white_2010") + absdiff("total_pop_2010")
+                                      + absdiff("perc_black_2010") + absdiff("perc_black_2010") +
+                                      + nodematch("state_name", diff=F)),
                                       response="weight",
+                                      control = control.ergm(init=coef(model_absolute_difference_fit_1),
+                                                             MCMLE.steplength.margin=0.25,
+                                                             MCMC.samplesize=50000,
+                                                             MCMC.interval=5000),
                                       reference=~Poisson,
-                                      verbose=T,
                                       eval.loglik=TRUE)
-
-
+                                      
 
 
 ###########################################################################################################

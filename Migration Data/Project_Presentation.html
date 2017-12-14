@@ -322,14 +322,6 @@ degree_prestige &lt;- sna::prestige(net_migration_states1115, cmode=&quot;indegr
 <ol start="2" style="list-style-type: decimal">
 <li>In Degree</li>
 </ol>
-<pre class="r"><code>in_degree_per_capita_weighted &lt;- strength(graph_states1115_per_capita, mode=c(&quot;in&quot;))
-
-
-in_degree_per_capita_display &lt;- rbind(in_degree_per_capita_weighted, node_county_names, node_state_names)
-in_degree_per_capita_display_transpose &lt;- t(in_degree_per_capita_display)
-in_degree_per_capita_data &lt;- as.data.frame(in_degree_per_capita_display_transpose, stringsAsFactors=F)
-
-in_degree_per_capita_data$in_degree_per_capita_weighted &lt;- as.numeric(as.character(in_degree_per_capita_data$in_degree_per_capita_weighted ))</code></pre>
 <pre class="r"><code>head(dplyr::arrange(in_degree_per_capita_data, desc(in_degree_per_capita_weighted)), n = 10)</code></pre>
 <pre><code>##    in_degree_per_capita_weighted     node_county_names node_state_names
 ## 1                            990        Laurens County               GA
@@ -345,13 +337,6 @@ in_degree_per_capita_data$in_degree_per_capita_weighted &lt;- as.numeric(as.char
 <ol start="3" style="list-style-type: decimal">
 <li>Out Degree</li>
 </ol>
-<pre class="r"><code>out_degree_per_capita_weighted &lt;- strength(graph_states1115_per_capita, mode=c(&quot;out&quot;))
-
-out_degree_per_capita_display &lt;- rbind(out_degree_per_capita_weighted, node_county_names, node_state_names)
-out_degree_per_capita_display_transpose &lt;- t(out_degree_per_capita_display)
-out_degree_per_capita_data &lt;- as.data.frame(out_degree_per_capita_display_transpose, stringsAsFactors=F)
-
-out_degree_per_capita_data$out_degree_per_capita_weighted &lt;- as.numeric(as.character(out_degree_per_capita_data$out_degree_per_capita_weighted))</code></pre>
 <pre class="r"><code>head(dplyr::arrange(out_degree_per_capita_data, desc(out_degree_per_capita_weighted)), n = 10)</code></pre>
 <pre><code>##    out_degree_per_capita_weighted     node_county_names node_state_names
 ## 1                            1197        Laurens County               GA

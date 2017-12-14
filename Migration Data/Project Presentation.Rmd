@@ -347,7 +347,7 @@ out_degree_weighted_data$out_degree_weighted <- as.numeric(as.character(out_degr
 ```
 
 ```{r}
-head(dplyr::arrange(in_degree_weighted_data, desc(in_degree_weighted)), n = 10)
+head(dplyr::arrange(out_degree_weighted_data, desc(out_degree_weighted)), n = 10)
 ```
 
 4) Eigenvector Centrality 
@@ -411,6 +411,7 @@ While looking at aggregate migration is helpful, it is also useful to know how m
 as.numeric.factor <- function(x) {as.numeric(levels(x))[x]}
 
 states1115_migration_complete$movers_numeric <- as.numeric.factor(states1115_migration_complete$movers)
+states1115_migration_complete$total_pop_2010 <- as.numeric(as.character(states1115_migration_complete$total_pop_2010))
 states1115_migration_complete <- transform(states1115_migration_complete, movers_per_capita = movers_numeric / total_pop_2010)
 
 #Creating edgelist from data
@@ -423,9 +424,8 @@ graph_states1115_per_capita = graph.edgelist(edgelist_states1115_per_capita[,1:2
 E(graph_states1115)$weight = as.numeric(edgelist_states1115_per_capita[,83])
 ```
 
-```{r, echo=F, include=F}
+```{r,  echo=F, include=F, message=F, warning=F}
 degree_per_capita_weighted <- strength(graph_states1115_per_capita)
-
 
 degree_per_capita_display <- rbind(degree_per_capita_weighted, node_county_names, node_state_names)
 degree_per_capita_display_transpose <- t(degree_per_capita_display)
@@ -439,7 +439,7 @@ head(dplyr::arrange(degree_per_capita_data, desc(degree_per_capita_weighted)), n
 ```
 
 2) In Degree
-```{r}
+```{r, echo=F, include=F, message=F, warning=F}
 in_degree_per_capita_weighted <- strength(graph_states1115_per_capita, mode=c("in"))
 
 
@@ -454,7 +454,7 @@ in_degree_per_capita_data$in_degree_per_capita_weighted <- as.numeric(as.charact
 head(dplyr::arrange(in_degree_per_capita_data, desc(in_degree_per_capita_weighted)), n = 10)
 ```
 3) Out Degree
-```{r}
+```{r, echo=F, include=F, message=F, warning=F}
 out_degree_per_capita_weighted <- strength(graph_states1115_per_capita, mode=c("out"))
 
 out_degree_per_capita_display <- rbind(out_degree_per_capita_weighted, node_county_names, node_state_names)
@@ -467,7 +467,58 @@ out_degree_per_capita_data$out_degree_per_capita_weighted <- as.numeric(as.chara
 ```{r}
 head(dplyr::arrange(out_degree_per_capita_data, desc(out_degree_per_capita_weighted)), n = 10)
 ```
+4) Eigenvector Centrality 
+```{r, message=F, warning=F}
+eigen_centrality_pc <- eigen_centrality(graph_states1115_per_capita, directed=T, weights=E(graph_states1115_per_capita)$weight)$vector
+```
 
+```{r, echo=F, include=F}
+eigen_centrality_pc_display <- rbind(eigen_centrality_pc, node_county_names, node_state_names)
+eigen_centrality_pc_display_transpose <- t(eigen_centrality_pc_display)
+eigen_centrality_pc_data <- as.data.frame(eigen_centrality_pc_display_transpose, stringsAsFactors=F)
+
+eigen_centrality_pc_data$eigen_centrality_pc <- as.numeric(as.character(eigen_centrality_pc_data$eigen_centrality_pc))
+```
+
+```{r, echo=F}
+head(dplyr::arrange(eigen_centrality_pc_data, desc(eigen_centrality_pc)), n = 10)
+```
+5) Degree Prestige (receiving many ties from other counties)
+```{r, echo=F}
+net_migration_pc_states1115 <-intergraph::asNetwork(graph_states1115_per_capita, ignore.eval=FALSE,
+                                                 names.eval='weight')
+
+```
+
+```{r}
+degree_prestige_pc <- sna::prestige(net_migration_pc_states1115, cmode="indegree")
+```
+
+```{r, echo=F, include=F}
+degree_prestige_pc_display <- rbind(degree_prestige_pc, node_county_names, node_state_names)
+degree_prestige_pc_display_transpose <- t(degree_prestige_pc_display)
+degree_prestige_pc_data <- as.data.frame(degree_prestige_pc_display_transpose, stringsAsFactors = F)
+degree_prestige_pc_data$degree_prestige_pc <- as.numeric(as.character(degree_prestige_pc_data$degree_prestige_pc))
+```
+
+```{r, echo=F}
+head(dplyr::arrange(degree_prestige_pc_data, desc(degree_prestige_pc)), n = 10)
+```
+6) Rank prestige (sum of prestige of neighbors)
+```{r}
+rank_presitge_pc <- sna::prestige(net_migration_pc_states1115, cmode="eigenvector")
+```
+
+```{r, echo=F, include=F}
+rank_prestige_pc_display <- rbind(rank_presitge_pc, node_county_names, node_state_names)
+rank_prestige_pc_display_transpose <- t(rank_prestige_pc_display)
+rank_prestige_pc_data <- as.data.frame(rank_prestige_pc_display_transpose, stringsAsFactors=F)
+rank_prestige_pc_data$rank_presitge_pc <- as.numeric(as.character(rank_prestige_pc_data$rank_presitge_pc))
+```
+
+```{r, echo=F}
+head(dplyr::arrange(rank_prestige_pc_data, desc(rank_presitge_pc)), n = 10)
+```
 ## ERGM Models
 I am interested to see if the observed network can be predicted based on observable covariates. In particular, I am intersted to see whether:
 
@@ -478,6 +529,7 @@ These ERGM models are computationally intensive (and take quite a long time to r
 
 1. Define the function
 + Nodal Covariates ("Sender" and "Receiver")
+
 ```{r, eval=F, results="hide"}
 model_sender_and_receiver <- net_migration_states1115 ~ edges + mutual  
                                         + nodeicov("unemployment_rate_2010") + nodeocov("unemployment_rate_2010")
