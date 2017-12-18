@@ -32,7 +32,7 @@ library(GERGM)
 library(bootnet)
 library(glasso)
 library(qgraph)
-
+library(reshape2)
 
 #Set working directory
 setwd('~/Dropbox/github/Migration Data')
@@ -209,6 +209,7 @@ states1115_texas_complete <- states1115_texas_complete[grepl("^48[0-9]", states1
 states1115_texas_complete <- states1115_texas_complete[grepl("^48[0-9]", states1115_texas_complete$recfips), ]
 states1115_texas_complete$movers <- as.numeric(as.factor(states1115_texas_complete$movers))
 
+save(states1115_texas_complete, file = "states1115_texas_complete.RData")
 #Generating shortest distance "arcs"
 for(i in 1:nrow(states1115_texas_complete))  {
   node1 <- county_covariate[county_covariate$sendfips == states1115_texas_complete[i,]$sendfips,]
@@ -391,6 +392,8 @@ states1115$movers <- as.numeric(as.character(states1115$movers))
 
 net_migration_states1115 <-intergraph::asNetwork(graph_states1115)
 
+save(net_migration_states1115, file='net_migration_states1115.RData')
+
 #Converting attributes to numeric types
 net_migration_states1115 %v% "unemployment_rate_2010" <- as.numeric(net_migration_states1115 %v% "unemployment_rate_2010")
 net_migration_states1115 %v% "hhincome_2010" <- as.numeric(net_migration_states1115 %v% "hhincome_2010")
@@ -445,7 +448,7 @@ model_absolute_difference_fit_1 <- ergm((net_migration_states1115 ~ edges +
                                          + absdiff("perc_black_2010") + absdiff("perc_black_2010") +
                                            + nodematch("state_name", diff=F)),
                                         response="weight",
-                                        control =  control = control.ergm(MCMLE.steplength.margin=0.25)
+                                        control = control.ergm(MCMLE.steplength.margin=0.25),
                                         reference=~Poisson,
                                         eval.loglik=TRUE)
 #Model for inference
@@ -478,30 +481,57 @@ rownames(county_covariate) <- county_covariate[,1]
 county_covariate[,1] <- NULL
 
 #Remove spaces from row strings
-rownames(adjacency_matrix) <- gsub(" ", "", rownames(adjacency_matrix), fixed = TRUE)
-colnames(adjacency_matrix) <- gsub(" ", "", colnames(adjacency_matrix), fixed = TRUE)
+rownames(county_covariate) <- gsub(" ", "", rownames(county_covariate), fixed = TRUE)
+colnames(county_covariate) <- gsub(" ", "", colnames(county_covariate), fixed = TRUE)
 rownames(county_covariate) <- gsub(" ", "", rownames(county_covariate), fixed = TRUE)
 
 
+#################
+#Ex: Texas
+#Creating an adjacency matrix
+texas_adj_matrix <- subset(states1115_texas_complete, select=c("sendfips", "recfips", "movers"))
+
+#Reshaping into long format
+texas_adj_matrix <- reshape(texas_adj_matrix, idvar = "sendfips",  timevar="recfips", direction="wide")
+
+#Renaming columns
+colnames(texas_adj_matrix) <- gsub("movers.", "", colnames(texas_adj_matrix), fixed = TRUE)
+
+#Making first column the name of the first 
+rownames(texas_adj_matrix) <- texas_adj_matrix[,1]
+texas_adj_matrix[,1] <- NULL
+
+#Removing counties to make matrix square
+texas_adj_matrix <- texas_adj_matrix[!rownames(texas_adj_matrix) %in% c("48269", "48301"), ]
+
+#Coercing data frame into matrix form 
+texas_adj_matrix_2 <- data.matrix(texas_adj_matrix)
+
 #Writing the formula
-formula <- adjacency_matrix ~ edges + mutual(alpha = 0.8) + sender("unemploymentrate_2010") + receiver("unemploymentrate_2010") 
+formula <- texas_adj_matrix_2 ~ edges + mutual(alpha = 0.8) + sender("unemploymentrate_2010") + receiver("unemploymentrate_2010") 
 #+ nodematch("state", diff=T)
 
+#Making variables numeric
+county_covariate$unemploymentrate_2010 <- as.numeric(as.character(county_covariate))
+
 #Ideal model I'd like to test 
-formula_ideal <- adjacency_matrix ~ edges + mutual(alpha = 0.8) + sender("unemploymentrate_2010") + receiver("unemploymentrate_2010")
+formula_ideal <- texas_adj_matrix_2 ~ edges + mutual(alpha = 0.8) + sender("unemploymentrate_2010") + receiver("unemploymentrate_2010")
+
+
+
 + sender("hhincome_2010") + receiver("hhincome_2010") +  sender("total_pop_2010") + receiver("total_pop_2010") +
   sender("hs_gradrate_2010") + receiver("hs_gradrate2010") + nodematch("state", diff=T)
 
 #Testing the first model (taking forever to run)
-test <- gergm(formula,
-              covariate_data = county_covariate)
-#number_of_networks_to_simulate = 1)
-# thin = 1/100,
-#proposal_variance = 0.05,
-#MCMC_burnin = 50,
-#seed = 342,
-#convergence_tolerance = 0.5,
-#verbose=TRUE)
+test <- gergm(formula_ideal,
+              covariate_data = county_covariate,
+              number_of_networks_to_simulate = 100,
+              thin = 1/100,
+              hyperparameter_optimization = TRUE, 
+              MCMC_burnin = 50,
+              seed = 342,
+              convergence_tolerance = 0.5,
+              verbose=TRUE)
 
 
 

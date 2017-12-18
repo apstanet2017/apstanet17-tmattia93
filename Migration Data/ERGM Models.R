@@ -241,13 +241,13 @@ model_sender_and_receiver_fit_2 <- ergm((net_migration_states1115 ~ edges +  nod
 
 #Inital model used for coefficeints
 model_absolute_difference_fit_1 <- ergm((net_migration_states1115 ~ edges +
-                                           + absdiff("unemployment_rate_2010") + absdiff("hhincome_2010") 
+                                         + absdiff("unemployment_rate_2010") + absdiff("hhincome_2010") 
                                          + absdiff("hh_poverty_rate_2010")
                                          + absdiff("perc_white_2010") + absdiff("total_pop_2010")
                                          + absdiff("perc_black_2010") + absdiff("perc_black_2010") +
-                                           + nodematch("state_name", diff=F)),
+                                         + nodematch("state_name", diff=F)),
                                         response="weight",
-                                        control =  control = control.ergm(MCMLE.steplength.margin=0.25),
+                                        control =  control.ergm(MCMLE.steplength.margin=0.25),
                                         reference=~Poisson,
                                         eval.loglik=TRUE)
 #Model for inference
