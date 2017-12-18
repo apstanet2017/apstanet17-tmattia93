@@ -1,37 +1,21 @@
 #Clear Memory
 rm(list = ls())
 
-
 #Load Libraries
 library(sna)
-#library(visNetwork)
-#library(threejs)
-#library(networkD3)
 library(ggplot2)
-#library(ggstance)
 library(ggmcmc)
 library(coda)
-#library(gdata)
-#library(readxl)
-#library(XLConnect)
 library(dplyr)
 library(foreign)
 library(haven)
-#library(plyr)
 library(statnet)
 library(igraph)
 library(network)
-#library(sand)
 library(intergraph)
 library(ergm)
-#library(maps)
-#library(geosphere)
 library(ergm.count)
 library(ergm.rank)
-#library(GERGM)
-#library(bootnet)
-#library(glasso)
-#library(qgraph)
 
 #Set working directory
 setwd('~/Dropbox/github/Migration Data')
@@ -62,9 +46,9 @@ colnames(texas_adj_matrix) <- gsub("movers.", "", colnames(texas_adj_matrix), fi
 rownames(texas_adj_matrix) <- texas_adj_matrix[,1]
 texas_adj_matrix[,1] <- NULL
 
-
 #Removing counties to make matrix square
 texas_adj_matrix <- texas_adj_matrix[!rownames(texas_adj_matrix) %in% c("48269", "48301"), ]
+
 # Creating sender and receiver matrix
 
 #1) Creating a unique id for each sender and receiver
@@ -79,8 +63,6 @@ receivers <- c(t(matrix((as.numeric(rownames(texas_adj_matrix))), n, n)))
 texas_adj_matrix <- as.matrix(texas_adj_matrix)
 y <- c(texas_adj_matrix)
 
-#4) Fitting the model
-fit <- glm(y ~ factor(senders) + factor(receivers), family=poisson)
 
 #Adding covariates
 #1) Unemployment in time t-1 (2010)
@@ -94,7 +76,6 @@ colnames(senders_unemployment) <- c("sendfips")
 
 
 #Merging the datasets
-library(plyr)
 texas_unemployment_matrix_s <- join(senders_unemployment, texas_1115_unemployment, by = "sendfips")
 
 #Reshaping for analysis
@@ -113,109 +94,7 @@ texas_unemployment_matrix_r <- join(receivers_unemployment, texas_1115_unemploym
 texas_receivers_umemployment <- texas_unemployment_matrix_r$unemploymentrate_2010 
 texas_receivers_umemployment <- as.numeric(texas_receivers_umemployment)
 
-#Fitting the model
-fit2 <- glm(y ~ texas_senders_umemployment + texas_receivers_umemployment, family=poisson) 
-
-#2) Percentage of the county that is white
-texas_1115_perc_white <- subset(states1115_texas_complete, select=c("sendfips", "perc_white_2010"))
-texas_1115_perc_white <- unique(texas_1115_perc_white)
-
-#a) Sending county
-senders_perc_white <- as.matrix(senders)
-senders_perc_white <- as.data.frame(senders_perc_white)
-colnames(senders_perc_white) <- c("sendfips")
-
-#Merging the datasets
-texas_perc_white_matrix_s <- join(senders_perc_white, texas_1115_perc_white, by = "sendfips")
-
-#Reshaping for analysis
-texas_senders_perc_white <- texas_perc_white_matrix_s$perc_white_2010 
-texas_senders_perc_white <- as.numeric(texas_senders_perc_white)
-
-
-#b) Receiving county
-receivers_perc_white <- as.matrix(receivers)
-receivers_perc_white <- as.data.frame(receivers_perc_white)
-colnames(receivers_perc_white) <- c("sendfips")
-
-#Merging the data sets
-texas_perc_white_matrix_r <- join(receivers_perc_white, texas_1115_perc_white, by =c("sendfips"))
-
-#Reshaping for analysis
-texas_receivers_perc_white <- texas_perc_white_matrix_r$perc_white_2010 
-texas_receivers_perc_white <- as.numeric(texas_receivers_perc_white)
-
-fit3 <- glm(y ~ texas_senders_umemployment + texas_receivers_umemployment + texas_senders_perc_white
-            + texas_receivers_perc_white, family=poisson)
-
-#3) High school graduation rate
-texas_1115_grad_rate <- subset(states1115_texas_complete, select=c("sendfips", "hs_gradrate_2010"))
-texas_1115_grad_rate <- unique(texas_1115_grad_rate)
-
-#a) Sending county
-senders_grad_rate <- as.matrix(senders)
-senders_grad_rate <- as.data.frame(senders_grad_rate)
-colnames(senders_grad_rate) <- c("sendfips")
-
-#Merging the datasets
-texas_grad_rate_matrix_s <- join(senders_grad_rate, texas_1115_grad_rate, by = "sendfips")
-
-#Reshaping for analysis
-texas_senders_grad_rate <- texas_grad_rate_matrix_s$hs_gradrate_2010 
-texas_senders_grad_rate <- as.numeric(texas_senders_grad_rate)
-
-#b) Receiving county
-receivers_grad_rate <- as.matrix(receivers)
-receivers_grad_rate <- as.data.frame(receivers_grad_rate)
-colnames(receivers_grad_rate) <- c("sendfips")
-
-#Merging the data sets
-texas_grad_rate_matrix_r <- join(receivers_grad_rate, texas_1115_grad_rate, by =c("sendfips"))
-
-#Reshaping for analysis
-texas_receivers_grad_rate <- texas_grad_rate_matrix_r$hs_gradrate_2010 
-texas_receivers_grad_rate <- as.numeric(texas_receivers_grad_rate)
-
-#Fit 4
-
-fit4 <- glm(y ~ texas_senders_umemployment + texas_receivers_umemployment + texas_senders_perc_white
-            + texas_receivers_perc_white + texas_senders_grad_rate + texas_receivers_grad_rate , family=poisson)
-
-#4) Household Income
-texas_1115_hh_income <- subset(states1115_texas_complete, select=c("sendfips", "hhincome_2010"))
-texas_1115_hh_income <- unique(texas_1115_hh_income)
-
-#a) Sending county
-senders_hh_income <- as.matrix(senders)
-senders_hh_income <- as.data.frame(senders_hh_income)
-colnames(senders_hh_income) <- c("sendfips")
-
-#Merging the datasets
-texas_hh_income_s <- join(senders_hh_income, texas_1115_hh_income, by = "sendfips")
-
-#Reshaping for analysis
-texas_senders_hh_income <- texas_hh_income_s$hhincome_2010 
-texas_senders_hh_income <- as.numeric(texas_senders_hh_income)
-
-#b) Receiving county
-receivers_hh_income <- as.matrix(receivers)
-receivers_hh_income <- as.data.frame(receivers_hh_income)
-colnames(receivers_hh_income) <- c("sendfips")
-
-#Merging the data sets
-texas_hh_income_r <- join(receivers_hh_income, texas_1115_hh_income, by =c("sendfips"))
-
-#Reshaping for analysis
-texas_receivers_hh_income<- texas_hh_income_r$hhincome_2010 
-texas_receivers_hh_income <- as.numeric(texas_receivers_hh_income)
-
-#Fit 5
-fit5 <- glm(y ~ texas_senders_umemployment + texas_receivers_umemployment + texas_senders_perc_white
-            + texas_receivers_perc_white + texas_senders_grad_rate + texas_receivers_grad_rate +
-            + texas_senders_hh_income + texas_receivers_hh_income , family=poisson)
-
-
-#5) Percentage of the county that is Latino
+#2) Percentage of the county whose residents identify as Latino
 texas_1115_perc_latino <- subset(states1115_texas_complete, select=c("sendfips", "perc_latino_2010"))
 texas_1115_perc_latino <- unique(texas_1115_perc_latino)
 
@@ -243,31 +122,96 @@ texas_perc_latino_matrix_r <- join(receivers_perc_latino, texas_1115_perc_latino
 texas_receivers_perc_latino <- texas_perc_latino_matrix_r$perc_latino_2010 
 texas_receivers_perc_latino <- as.numeric(texas_receivers_perc_latino)
 
+#3) Percentage of the county whose residents identify as white
+texas_1115_perc_white <- subset(states1115_texas_complete, select=c("sendfips", "perc_white_2010"))
+texas_1115_perc_white <- unique(texas_1115_perc_white)
+
+#a) Sending county
+senders_perc_white <- as.matrix(senders)
+senders_perc_white <- as.data.frame(senders_perc_white)
+colnames(senders_perc_white) <- c("sendfips")
+
+#Merging the datasets
+texas_perc_white_matrix_s <- join(senders_perc_white, texas_1115_perc_white, by = "sendfips")
+
+#Reshaping for analysis
+texas_senders_perc_white <- texas_perc_white_matrix_s$perc_white_2010 
+texas_senders_perc_white <- as.numeric(texas_senders_perc_white)
+
+#b) Receiving county
+receivers_perc_white <- as.matrix(receivers)
+receivers_perc_white <- as.data.frame(receivers_perc_white)
+colnames(receivers_perc_white) <- c("sendfips")
+
+#Merging the data sets
+texas_perc_white_matrix_r <- join(receivers_perc_white, texas_1115_perc_white, by =c("sendfips"))
+
+#Reshaping for analysis
+texas_receivers_perc_white <- texas_perc_white_matrix_r$perc_white_2010 
+texas_receivers_perc_white <- as.numeric(texas_receivers_perc_white)
+
+#4) High school graduation rate
+texas_1115_grad_rate <- subset(states1115_texas_complete, select=c("sendfips", "hs_gradrate_2010"))
+texas_1115_grad_rate <- unique(texas_1115_grad_rate)
+
+#a) Sending county
+senders_grad_rate <- as.matrix(senders)
+senders_grad_rate <- as.data.frame(senders_grad_rate)
+colnames(senders_grad_rate) <- c("sendfips")
+
+#Merging the datasets
+texas_grad_rate_matrix_s <- join(senders_grad_rate, texas_1115_grad_rate, by = "sendfips")
+
+#Reshaping for analysis
+texas_senders_grad_rate <- texas_grad_rate_matrix_s$hs_gradrate_2010 
+texas_senders_grad_rate <- as.numeric(texas_senders_grad_rate)
+
+#b) Receiving county
+receivers_grad_rate <- as.matrix(receivers)
+receivers_grad_rate <- as.data.frame(receivers_grad_rate)
+colnames(receivers_grad_rate) <- c("sendfips")
+
+#Merging the data sets
+texas_grad_rate_matrix_r <- join(receivers_grad_rate, texas_1115_grad_rate, by =c("sendfips"))
+
+#Reshaping for analysis
+texas_receivers_grad_rate <- texas_grad_rate_matrix_r$hs_gradrate_2010 
+texas_receivers_grad_rate <- as.numeric(texas_receivers_grad_rate)
+
+#5) Household Income
+texas_1115_hh_income <- subset(states1115_texas_complete, select=c("sendfips", "hhincome_2010"))
+texas_1115_hh_income <- unique(texas_1115_hh_income)
+
+#a) Sending county
+senders_hh_income <- as.matrix(senders)
+senders_hh_income <- as.data.frame(senders_hh_income)
+colnames(senders_hh_income) <- c("sendfips")
+
+#Merging the datasets
+texas_hh_income_s <- join(senders_hh_income, texas_1115_hh_income, by = "sendfips")
+
+#Reshaping for analysis
+texas_senders_hh_income <- texas_hh_income_s$hhincome_2010 
+texas_senders_hh_income <- as.numeric(texas_senders_hh_income)
+
+#b) Receiving county
+receivers_hh_income <- as.matrix(receivers)
+receivers_hh_income <- as.data.frame(receivers_hh_income)
+colnames(receivers_hh_income) <- c("sendfips")
+
+#Merging the data sets
+texas_hh_income_r <- join(receivers_hh_income, texas_1115_hh_income, by =c("sendfips"))
+
+#Reshaping for analysis
+texas_receivers_hh_income<- texas_hh_income_r$hhincome_2010 
+texas_receivers_hh_income <- as.numeric(texas_receivers_hh_income)
+
 #Fit 6
-fit6 <- glm(y ~ texas_senders_umemployment + texas_receivers_umemployment + texas_senders_perc_white
+model1 <- glm(y ~ texas_senders_umemployment + texas_receivers_umemployment + texas_senders_perc_white
             + texas_receivers_perc_white + texas_senders_grad_rate + texas_receivers_grad_rate +
             + texas_senders_hh_income + texas_receivers_hh_income +
-            + texas_senders_perc_latino + texas_receivers_perc_latino , family=poisson, data=bma_data)
+            + texas_senders_perc_latino + texas_receivers_perc_latino , family=poisson)
 
+summary(model1)
 
-
-############################################
-library(BMA)
-#Creating data frame
-bma_data <- rbind(y, texas_senders_umemployment, texas_receivers_umemployment, texas_senders_perc_white,
-                  texas_receivers_perc_white, texas_senders_grad_rate, texas_receivers_grad_rate, 
-                  texas_senders_hh_income, texas_receivers_hh_income, texas_senders_perc_latino, texas_receivers_perc_latino)
-
-bma_data <- t(bma_data)
-
-bma_data <- as.data.frame(bma_data)
-
-#Dropping missing variable
-bma_data <- bma_data[complete.cases(bma_data), ]
-
-#Removing missing values
-bma_test <- bic.glm(y ~ texas_senders_umemployment + texas_receivers_umemployment + texas_senders_perc_white
-                + texas_receivers_perc_white + texas_senders_grad_rate + texas_receivers_grad_rate 
-                + texas_senders_hh_income + texas_receivers_hh_income
-                + texas_senders_perc_latino + texas_receivers_perc_latino,  glm.family = poisson, data = bma_data)
 

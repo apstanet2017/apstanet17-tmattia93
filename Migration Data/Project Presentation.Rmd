@@ -2,7 +2,9 @@
 title: "Project Presenatation"
 author: "Taylor Mattia"
 date: "December 6, 2017"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 ##Project Goals:
 
@@ -209,7 +211,7 @@ After I construct the data in this manner, I can visualize the data in a number 
 1. Within state migration (e.g. Texas)
 ```{r, results="hide", echo=F, eval=F}
 #Subset all migration to and from Texas Counties 
-states1115_texas_complete <-subset(states1115_migration_covariate, states1115_migration_covariate$state==48)
+states1115_texas_complete <-subset(states1115_migration_complete, states1115_migration_complete$state==48)
 
 #Intra-texas migration
 states1115_texas_complete <- states1115_texas_complete[grepl("^48[0-9]", states1115_texas_complete$sendfips), ]
@@ -519,66 +521,277 @@ rank_prestige_pc_data$rank_presitge_pc <- as.numeric(as.character(rank_prestige_
 ```{r, echo=F}
 head(dplyr::arrange(rank_prestige_pc_data, desc(rank_presitge_pc)), n = 10)
 ```
-## ERGM Models
-I am interested to see if the observed network can be predicted based on observable covariates. In particular, I am intersted to see whether:
+## P1 Model 
+I am interested to see if the observed network can be predicted based on observable covariates. In particular, I am interested to see whether county covariates themselves can predict where people move to and from. Because of the size of the 2011-2015 migration, I chose to estimate a P1 Model that looks at migration to and from all counties in Texas. For each sending and receiving county, I have nodal covariate information on unemployment (\% of people over the age of 16 who are actively seeking work but cannot find it), high school graduation rates, percentage of people in each county that identify as white and Latino, and median household income for the year 2010. Therefore, I am interested in whether information at time $t-1$ can predict migration in time $t$. In doing so, I attempt to test the following hypotheses:
 
-* County covariates themselves can predict where people move to and from (i.e. people move out of county A  because the high school graduation rate is low) or
-* Differences between counties matter (i.e. people move from county A to county B because county B has a lower unemployment rate compared to county B)
+* H1: The higher a county's unemployment rate, the more outward migration a county will experience (and vice versa for lower unemployment rates)
 
-These ERGM models are computationally intensive (and take quite a long time to run), so I will present the code I plan to use to test which model best fits the observed data:
+* H2: The higher a county's median household income, the more indward migration a county will experience (and vice versa for lower median incomes)
 
-1. Define the function
-+ Nodal Covariates ("Sender" and "Receiver")
+* H3: The lower a county's high school graduation rate, the more outward migration a county will experience (and vice versa for higher high school graduation rates)
 
-```{r, eval=F, results="hide"}
-model_sender_and_receiver <- net_migration_states1115 ~ edges + mutual  
-                                        + nodeicov("unemployment_rate_2010") + nodeocov("unemployment_rate_2010")
-                                        + nodeicov("hhincome_2010") + nodeocov("hhincome_2010")
-                                        + nodeicov("hs_gradrate_2010") + nodeocov("hs_gradrate_2010")
-                                        + nodeicov("hh_poverty_rate_2010") + nodeocov("hh_poverty_rate_2010")
-                                        + nodeicov("perc_white_2010") + nodeocov("perc_white_2010")
-                                        + nodeicov("total_pop_2010") + nodeocov("total_pop_2010") + 
-                                        nodematch("state_name", diff=T) 
+* H4: I have no strong prior assumption as to why counties with a higher percentage of white or Latino residents would experience more or less migration. If I had information about the demographic information about the movers, I would feel more comfortable making claims about the relationship between demographic information of the county and inward and outward migration.
+
+# The Data
+
+I first need to manipulate the data such that I have an $n x n$ square adjacency matrix where the rows representing sending counties, the columns represent receiving counties, and the cell value represents the number of people who moved from the sending to receiving county. I begin by loading an object called "network_migration_states1115.RData." This is a network object that has county to county migration for all counties in all states (excluding Alaska and Hawaii) between 2011 and 2015.
+
+```{r}
+network_1115 <- get(load('net_migration_states1115.RData'))
+```
+
+Then, I create an induced subgraph that represents migration to and from all counties in Texas (intra-Texas migration).
+
+```{r}
+# Creating a network of migration within Texas 
+texas_1115 <- get.inducedSubgraph(network_1115, which(network_1115 %v% 'state_name'=="TX"))
+
+#Creating Adjacency Matrix
+states1115_texas_complete <- get(load('states1115_texas_complete.RData'))
+texas_adj_matrix <- subset(states1115_texas_complete, select=c("sendfips", "recfips", "movers"))
+
+#Reshaping into long format
+texas_adj_matrix <- reshape(texas_adj_matrix, idvar = "sendfips",  timevar="recfips", direction="wide")
+
+#Renaming columns
+colnames(texas_adj_matrix) <- gsub("movers.", "", colnames(texas_adj_matrix), fixed = TRUE)
+
+#Making first column the name of the first column
+rownames(texas_adj_matrix) <- texas_adj_matrix[,1]
+texas_adj_matrix[,1] <- NULL
+
+#Removing counties to make matrix square
+texas_adj_matrix <- texas_adj_matrix[!rownames(texas_adj_matrix) %in% c("48269", "48301"), ]
+rownames(texas_adj_matrix) <-as.numeric(as.character(rownames(texas_adj_matrix)))
+
+#Reordering matrix by row and column vectors
+texas_adj_matrix <- texas_adj_matrix[ order(row.names(texas_adj_matrix)), order(colnames(texas_adj_matrix)) ]
+texas_adj_matrix <- as.matrix(texas_adj_matrix)
+
+#Assigning values of 0 to counties that have "NA" values --> meaning there was no movement from county A to county B between 2011 and 2015
+
+texas_adj_matrix[is.na(texas_adj_matrix)] <- 0
+
+#Assigning NA values to diagonals
+diag(texas_adj_matrix) <- NA
 
 ```
 
-+ Difference in Nodal Covariates 
-```{r, eval=F, results="hide"}
-model_absolute_difference <- net_migration_states1115 ~ edges + mutual + nodematch("state_name", diff=T) +
-                            + absdiff("unemployment_rate_2010") + absdifference("hhincome_2010") 
-                            + absdiff("hs_gradrate_2010") + absdifference("hh_poverty_rate_2010")
-                            + absdiff("perc_white_2010") + absdifference("total_pop_2010")
+The final adjacency matrix is a 252 x 252 matrix:
+
+```{r}
+head(texas_adj_matrix, n = 2L, addrownums=TRUE)
 ```
 
-2. Apply ERGM function to fit each model separately
-```{r, eval=F, results="hide"}
-model_sender_and_receiver_fit <- ergm(model_sender_and_receiver,
-                        control=control.ergm(seed=1),
-                        response="weight",
-                        reference=~Poisson,
-                        verbose=T,
-                        eval.loglik=TRUE)
+Next, I create a sender and receiver matrix:
 
-model_absolute_difference_fit <- ergm(model_absolute_difference, 
-                                      control=control.ergm(seed=1),
-                                      response="weight",
-                                      reference=~Poisson,
-                                      verbose=T,
-                                      eval.loglik=TRUE)
+```{r}
+#Creating a unique id for each sender and receiver
+n <- nrow(texas_adj_matrix)
+
+#2) Senders and Receivers
+senders <- c(matrix((as.numeric(rownames(texas_adj_matrix))), n, n))
+
+receivers <- c(t(matrix((as.numeric(rownames(texas_adj_matrix))), n, n)))
 ```
 
-3. Simulate from each model fit
-```{r, eval=F, results="hide"}
-sender_and_receiver_sim <- simulate(model_sender_and_receiver_fit, nsims=100)
+Then, I extract the outcome variable (weighted edges from sender to receiver county)
 
-absolute_difference_sim <- simulate(model_absolute_difference_fit, nsims=100)
+```{r}
+y <- c(texas_adj_matrix)
+```
+
+```{r}
+#Senders
+head(senders, n = 10)
+
+#Receivers
+head(receivers, n = 10)
+
+#Weighted edges 
+head(y, n = 10)
+```
+
+I then do the same process to create lists with length $ = n^{n}$ for each covariate for both sending and receiving counties. The example shown is the data cleaning and manipulation process for county unemployment. The same pattern was extended for the other covariates of interest.
+
+First, I extracted the county unemployment information from the dataset containing covariates.
+
+```{r}
+# Extracting unemployment at time t-1 (2010) from county covariate data set
+texas_1115_unemployment <- subset(states1115_texas_complete, select=c("sendfips", "unemploymentrate_2010"))
+texas_1115_unemployment <- unique(texas_1115_unemployment)
+```
+
+Then, I created an $n^{n}$  (where n = the total number of counties in the data set) list of unemployment rates, which I matched with the list of "senders" based on unique county id's that were assigned using state and county FIPS codes. 
+
+```{r}
+# Sending county unemployment 
+senders_unemployment <- as.matrix(senders)
+senders_unemployment <- as.data.frame(senders_unemployment)
+colnames(senders_unemployment) <- c("sendfips")
+
+#Merging the datasets
+texas_unemployment_matrix_s <- join(senders_unemployment, texas_1115_unemployment, by = "sendfips")
+
+#Reshaping for analysis
+texas_senders_umemployment <- texas_unemployment_matrix_s$unemploymentrate_2010 
+texas_senders_umemployment <- as.numeric(texas_senders_umemployment)
 
 ```
-4. Goodness of fit and MCMC Diagnostics 
-```{r, eval=F, results="hide"}
-model_sender_and_receiver_gof <- gof(model_sender_and_receiver_fit ~ model)
-model_absolute_difference_gof <- gof(model_absolute_difference_fit ~ model)
 
-mcmc.diagnostics(model_sender_and_receiver_fit)
-mcmc.diagnostics(model_absolute_difference_fit)
+This same process was undertaken for receiving counties.
+
+```{r}
+#Receiving county unemployment 
+receivers_unemployment <- as.matrix(receivers)
+receivers_unemployment <- as.data.frame(receivers_unemployment)
+colnames(receivers_unemployment) <- c("sendfips")
+
+#Merging the data sets
+texas_unemployment_matrix_r <- join(receivers_unemployment, texas_1115_unemployment, by =c("sendfips"))
+
+#Reshaping for analysis
+texas_receivers_umemployment <- texas_unemployment_matrix_r$unemploymentrate_2010 
+texas_receivers_umemployment <- as.numeric(texas_receivers_umemployment)
 ```
+
+The sending and receiving county lists look as follows:
+
+```{r}
+#Senders unemployment 
+head(senders, n = 10)
+head(texas_senders_umemployment, n = 10)
+
+#Receiveres unemployment
+head(receivers, n = 10)
+head(texas_receivers_umemployment, n = 10)
+```
+
+The same process was done for sending and receiving counties for the remaining covariates of interest (percentage of residents in the county that identify as white and Latino, median household income, and high school graduation rates).
+
+```{r, include=F}
+#2) Percentage of the county whose residents identify as Latino
+texas_1115_perc_latino <- subset(states1115_texas_complete, select=c("sendfips", "perc_latino_2010"))
+texas_1115_perc_latino <- unique(texas_1115_perc_latino)
+
+#a) Sending county
+senders_perc_latino <- as.matrix(senders)
+senders_perc_latino <- as.data.frame(senders_perc_latino)
+colnames(senders_perc_latino) <- c("sendfips")
+
+#Merging the datasets
+texas_perc_latino_matrix_s <- join(senders_perc_latino, texas_1115_perc_latino, by = "sendfips")
+
+#Reshaping for analysis
+texas_senders_perc_latino <- texas_perc_latino_matrix_s$perc_latino_2010 
+texas_senders_perc_latino <- as.numeric(texas_senders_perc_latino)
+
+#b) Receiving county
+receivers_perc_latino <- as.matrix(receivers)
+receivers_perc_latino <- as.data.frame(receivers_perc_latino)
+colnames(receivers_perc_latino) <- c("sendfips")
+
+#Merging the data sets
+texas_perc_latino_matrix_r <- join(receivers_perc_latino, texas_1115_perc_latino, by =c("sendfips"))
+
+#Reshaping for analysis
+texas_receivers_perc_latino <- texas_perc_latino_matrix_r$perc_latino_2010 
+texas_receivers_perc_latino <- as.numeric(texas_receivers_perc_latino)
+
+#3) Percentage of the county whose residents identify as white
+texas_1115_perc_white <- subset(states1115_texas_complete, select=c("sendfips", "perc_white_2010"))
+texas_1115_perc_white <- unique(texas_1115_perc_white)
+
+#a) Sending county
+senders_perc_white <- as.matrix(senders)
+senders_perc_white <- as.data.frame(senders_perc_white)
+colnames(senders_perc_white) <- c("sendfips")
+
+#Merging the datasets
+texas_perc_white_matrix_s <- join(senders_perc_white, texas_1115_perc_white, by = "sendfips")
+
+#Reshaping for analysis
+texas_senders_perc_white <- texas_perc_white_matrix_s$perc_white_2010 
+texas_senders_perc_white <- as.numeric(texas_senders_perc_white)
+
+#b) Receiving county
+receivers_perc_white <- as.matrix(receivers)
+receivers_perc_white <- as.data.frame(receivers_perc_white)
+colnames(receivers_perc_white) <- c("sendfips")
+
+#Merging the data sets
+texas_perc_white_matrix_r <- join(receivers_perc_white, texas_1115_perc_white, by =c("sendfips"))
+
+#Reshaping for analysis
+texas_receivers_perc_white <- texas_perc_white_matrix_r$perc_white_2010 
+texas_receivers_perc_white <- as.numeric(texas_receivers_perc_white)
+
+#4) High school graduation rate
+texas_1115_grad_rate <- subset(states1115_texas_complete, select=c("sendfips", "hs_gradrate_2010"))
+texas_1115_grad_rate <- unique(texas_1115_grad_rate)
+
+#a) Sending county
+senders_grad_rate <- as.matrix(senders)
+senders_grad_rate <- as.data.frame(senders_grad_rate)
+colnames(senders_grad_rate) <- c("sendfips")
+
+#Merging the datasets
+texas_grad_rate_matrix_s <- join(senders_grad_rate, texas_1115_grad_rate, by = "sendfips")
+
+#Reshaping for analysis
+texas_senders_grad_rate <- texas_grad_rate_matrix_s$hs_gradrate_2010 
+texas_senders_grad_rate <- as.numeric(texas_senders_grad_rate)
+
+#b) Receiving county
+receivers_grad_rate <- as.matrix(receivers)
+receivers_grad_rate <- as.data.frame(receivers_grad_rate)
+colnames(receivers_grad_rate) <- c("sendfips")
+
+#Merging the data sets
+texas_grad_rate_matrix_r <- join(receivers_grad_rate, texas_1115_grad_rate, by =c("sendfips"))
+
+#Reshaping for analysis
+texas_receivers_grad_rate <- texas_grad_rate_matrix_r$hs_gradrate_2010 
+texas_receivers_grad_rate <- as.numeric(texas_receivers_grad_rate)
+
+#5) Household Income
+texas_1115_hh_income <- subset(states1115_texas_complete, select=c("sendfips", "hhincome_2010"))
+texas_1115_hh_income <- unique(texas_1115_hh_income)
+
+#a) Sending county
+senders_hh_income <- as.matrix(senders)
+senders_hh_income <- as.data.frame(senders_hh_income)
+colnames(senders_hh_income) <- c("sendfips")
+
+#Merging the datasets
+texas_hh_income_s <- join(senders_hh_income, texas_1115_hh_income, by = "sendfips")
+
+#Reshaping for analysis
+texas_senders_hh_income <- texas_hh_income_s$hhincome_2010 
+texas_senders_hh_income <- as.numeric(texas_senders_hh_income)
+
+#b) Receiving county
+receivers_hh_income <- as.matrix(receivers)
+receivers_hh_income <- as.data.frame(receivers_hh_income)
+colnames(receivers_hh_income) <- c("sendfips")
+
+#Merging the data sets
+texas_hh_income_r <- join(receivers_hh_income, texas_1115_hh_income, by =c("sendfips"))
+
+#Reshaping for analysis
+texas_receivers_hh_income<- texas_hh_income_r$hhincome_2010 
+texas_receivers_hh_income <- as.numeric(texas_receivers_hh_income)
+```
+
+I then estimated a Poisson count model to see whether any of the covariates of interest increase or decrease the likelihood of migration from a sending county to a receiving county:
+
+```{r}
+model1 <- glm(y ~ texas_senders_umemployment + texas_receivers_umemployment + texas_senders_perc_white
+            + texas_receivers_perc_white + texas_senders_grad_rate + texas_receivers_grad_rate +
+            + texas_senders_hh_income + texas_receivers_hh_income +
+           + texas_senders_perc_latino + texas_receivers_perc_latino , family="poisson")
+
+summary(model1)
+```
+
+Based on the results of the model, it is difficult to assess whether any given covariate is a good predictor of county to county migration for both sending and receiving counties. In the future, it would be useful to randomly sample edges from the network and conduct inference in that manner, as the size of the network is so large that every predictor will appear "significant".
